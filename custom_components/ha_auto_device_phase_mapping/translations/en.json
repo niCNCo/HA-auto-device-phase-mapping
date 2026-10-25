@@ -1,0 +1,14 @@
+{
+  "title": "HA_auto_device_phase_mapping",
+  "config": {
+    "step": {
+      "user": {
+        "title": "HA_auto_device_phase_mapping",
+        "description": "Install the passive phase-learning integration, then choose P1 power sensors and exclusions on the Phase Mapper sidebar dashboard."
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Only one Phase Mapper instance is supported."
+    }
+  }
+}

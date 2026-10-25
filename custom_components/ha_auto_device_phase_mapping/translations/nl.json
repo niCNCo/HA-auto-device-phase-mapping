@@ -1,0 +1,14 @@
+{
+  "title": "Automatische fasemapper",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Automatische fasemapper",
+        "description": "Installeer de passieve faseherkenning en stel daarna de P1-fasevermogenssensoren en uitsluitingen in via het Phase Mapper-dashboard in de zijbalk."
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Er kan maar één fasemapper worden toegevoegd."
+    }
+  }
+}

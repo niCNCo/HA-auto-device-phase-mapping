@@ -1,0 +1,18 @@
+{
+  "domain": "ha_auto_device_phase_mapping",
+  "name": "HA_auto_device_phase_mapping",
+  "version": "1.4.4",
+  "config_flow": true,
+  "single_config_entry": true,
+  "integration_type": "service",
+  "iot_class": "local_push",
+  "documentation": "https://github.com/nicopeet911/HA_auto_device_phase_mapping",
+  "issue_tracker": "https://github.com/nicopeet911/HA_auto_device_phase_mapping/issues",
+  "codeowners": [],
+  "dependencies": [
+    "frontend",
+    "http",
+    "panel_custom"
+  ],
+  "requirements": []
+}
