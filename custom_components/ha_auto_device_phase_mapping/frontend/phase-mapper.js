@@ -1,7 +1,7 @@
 /* HA_auto_device_phase_mapping v1.6.2 — shared Home Assistant panel and dashboard card. */
 (() => {
   'use strict';
-  const VERSION = '1.6.4';
+  const VERSION = '1.6.5';
   const PHASES = ['L1', 'L2', 'L3'];
   const esc = value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
   const fmtW = value => value == null || !Number.isFinite(Number(value)) ? '—' : `${Math.round(Number(value)).toLocaleString()} W`;
@@ -33,23 +33,30 @@
     .pm-compact-devices{margin-top:8px;padding-top:7px;border-top:1px solid var(--pm-border);font-size:11px}
     .pm-compact-devices summary{cursor:pointer;font-weight:600}
     .pm-compact-footer{text-align:right;margin-top:11px;font-size:12px}
-    .pm-ring-wrap{display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:center}
-    .pm-ring-graphic{width:170px;height:170px;position:relative;flex:0 0 170px;max-width:100%}
-    .pm-ring-graphic svg{display:block;width:100%;height:100%}
+    /* The mockup had a much wider household tile. The real 4-column panel is
+       narrower, so give the chart a full-width row rather than crushing the
+       circle alongside the legend. Both compact and panel views share this. */
+    .pm-ring-wrap{display:grid;grid-template-columns:minmax(0,1fr);gap:13px;min-width:0}
+    .pm-ring-graphic{width:min(100%,248px);aspect-ratio:1;position:relative;margin:0 auto}
+    .pm-ring-graphic svg{display:block;width:100%;height:100%;overflow:visible}
     .pm-ring-glow{filter:drop-shadow(0 0 2px currentColor);stroke-linecap:butt}
-    .pm-ring-center{position:absolute;inset:24%;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center}
-    .pm-ring-center strong{font-size:19px;white-space:nowrap;letter-spacing:-.3px}
-    .pm-ring-center span{font-size:10px;color:var(--secondary-text-color)}
-    .pm-ring-legends{flex:1 1 175px;min-width:0}
-    .pm-ring-label{font-weight:600;font-size:10px;color:var(--secondary-text-color);margin:6px 0 3px}
-    .pm-ring-legend{display:flex;justify-content:space-between;align-items:baseline;gap:6px;font-size:10px;padding:2px 0}
-    .pm-ring-legend span{display:flex;align-items:center;gap:5px;min-width:0}
-    .pm-ring-legend i{height:7px;width:7px;display:inline-block;border-radius:50%;flex:none}
-    .pm-ring-legend strong{white-space:nowrap;font-size:10px}.pm-ring-legend small{color:var(--secondary-text-color);font-weight:400}
-    .pm-household-graphic{margin:12px 0;padding:10px 3px;border-top:1px solid var(--pm-border)}
-    .pm-household-graphic .pm-ring-graphic{width:145px;height:145px;flex-basis:145px}
+    .pm-ring-center{position:absolute;inset:25%;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;gap:3px}
+    .pm-ring-center strong{font-size:clamp(20px,1.7vw,25px);white-space:nowrap;letter-spacing:-.5px;font-variant-numeric:tabular-nums}
+    .pm-ring-center span{font-size:11px;color:var(--secondary-text-color);white-space:nowrap}
+    .pm-ring-legends{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:9px;min-width:0;width:100%}
+    .pm-ring-group{min-width:0;border:1px solid var(--pm-border);border-radius:9px;padding:9px;background:color-mix(in srgb,var(--card-background-color) 84%,transparent)}
+    .pm-ring-label{font-weight:650;font-size:11px;color:var(--secondary-text-color);margin:0 0 7px}
+    .pm-ring-legend{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;column-gap:5px;row-gap:1px;font-size:11px;padding:4px 0}
+    .pm-ring-legend span{display:flex;align-items:center;gap:6px;min-width:0}
+    .pm-ring-legend i{height:8px;width:8px;display:inline-block;border-radius:50%;flex:none}
+    .pm-ring-legend strong{font-size:11px;font-variant-numeric:tabular-nums;white-space:nowrap}
+    .pm-ring-legend small{color:var(--secondary-text-color);font-weight:400;font-size:10px}
+    .pm-household-graphic{margin:14px 0;padding:15px 0;border-top:1px solid var(--pm-border)}
+    .pm-household-graphic .pm-ring-graphic{width:min(100%,240px)}
+    @media(max-width:420px){.pm-ring-legends{grid-template-columns:1fr}}
+
     @media(max-width:1150px){.pm-compact-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-    @media(max-width:570px){.pm-compact-grid{grid-template-columns:1fr}.pm-ring-wrap{justify-content:space-evenly}}
+    @media(max-width:570px){.pm-compact-grid{grid-template-columns:1fr}}
     .page{padding:16px 16px 56px;max-width:1450px;margin:0 auto}.surface{background:var(--card-background-color,#fff);box-shadow:var(--ha-card-box-shadow,0 1px 4px #0001);border-radius:var(--ha-card-border-radius,14px);padding:20px}
     .card{display:block}.card .surface{padding:16px}.paneltop{background:var(--app-header-background-color,var(--primary-color,#1864a8));color:var(--text-primary-color,#fff);padding:12px 20px;display:flex;align-items:center;gap:12px}
     .paneltop h2{margin:0;font-size:19px}.drawer{background:transparent;border:0;color:inherit;font-size:24px;cursor:pointer;min-width:38px;text-align:center}
@@ -868,7 +875,6 @@ this._loading=false;this._busy=false;this._error='';this._message='';this._lastF
       const notYet=Math.min(residual,waiting);
       const unknown=Math.max(0,residual-notYet);
       const percent=value=>total>0?(100*value/total).toFixed(1)+'%':'0.0%';
-      const circumference=2*Math.PI*41;
       const arcs=(values,colors,radius)=>{
         const circumference=2*Math.PI*radius;
         let cursor=0;
@@ -881,19 +887,19 @@ this._loading=false;this._busy=false;this._error='';this._message='';this._lastF
           return `<circle cx="60" cy="60" r="${radius}" fill="none" stroke="${colors[index]}" stroke-width="9" stroke-dasharray="${Math.max(0,length-.8)} ${circumference}" stroke-dashoffset="${offset}" transform="rotate(-90 60 60)" class="pm-ring-glow"/>`;
         }).join('');
       };
-      const legend=(label,watts,color)=>`<div class="pm-ring-legend"><span><i style="background:${color}"></i>${esc(label)}</span><strong>${fmtW(watts)} <small>${percent(watts)}</small></strong></div>`;
+      const legend=(label,watts,color)=>`<div class="pm-ring-legend"><span><i style="background:${color}"></i>${esc(label)}</span><strong>${measured?fmtW(watts):'—'} <small>${measured?percent(watts):'—'}</small></strong></div>`;
       return `<div class="pm-ring-wrap"><div class="pm-ring-graphic"><svg viewBox="0 0 120 120" role="img" aria-label="Household load phase and mapping distribution">
           <circle cx="60" cy="60" r="46" fill="none" stroke="currentColor" stroke-opacity=".10" stroke-width="9"/>
           <circle cx="60" cy="60" r="32" fill="none" stroke="currentColor" stroke-opacity=".10" stroke-width="9"/>
           ${measured?arcs(phases,['#3b82f6','#f59e0b','#a78bfa'],46):''}
           ${measured?arcs([mapped,unknown,notYet],['#34d399','#fb7185','#94a3b8'],32):''}
           </svg><div class="pm-ring-center"><strong>${measured?fmtW(total):'—'}</strong><span>Household total</span></div></div>
-          <div class="pm-ring-legends"><div class="pm-ring-label">Phase distribution</div>
-          ${PHASES.map((p,i)=>legend(p,phases[i],['#3b82f6','#f59e0b','#a78bfa'][i])).join('')}
-          <div class="pm-ring-label">Device coverage</div>
+          <div class="pm-ring-legends"><div class="pm-ring-group"><div class="pm-ring-label">Phase distribution</div>
+          ${PHASES.map((p,i)=>legend(p,phases[i],['#3b82f6','#f59e0b','#a78bfa'][i])).join('')}</div>
+          <div class="pm-ring-group"><div class="pm-ring-label">Device coverage</div>
           ${legend('Mapped',mapped,'#34d399')}
           ${legend('Unknown',unknown,'#fb7185')}
-          ${legend('Not yet mapped',notYet,'#94a3b8')}</div></div>`;
+          ${legend('Not yet mapped',notYet,'#94a3b8')}</div></div></div>`;
     }
     _compactCard(d){
       const breakdown=d.power_breakdown||{};
