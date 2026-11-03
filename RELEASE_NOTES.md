@@ -1,3 +1,12 @@
+# v1.6.4 — Release update indicator
+
+- Automatically check published GitHub releases, including pre-releases, when the Phase Mapper frontend opens and every three hours while it stays open.
+- Keep the green learning-status dot separate from the installed-version indicator: green means no newer published release, red means a newer release exists and neutral means unverified.
+- Add **Check now** to the Info tab, bypassing the refresh interval; clicking the version opens the newer GitHub release page when one is available.
+- GitHub API failures and missing release data never falsely claim the installation is up to date. The phase-learning logic and stored evidence are unchanged.
+
+---
+
 # v1.6.3 — Lovelace layouts, household power rings and optional battery SoC
 
 - Added a **Compact** Lovelace card with L1/L2/L3 and Household total, including live phase loads, grid current headroom, unknown load estimates and expandable mapped devices. The previous list remains available as **Detailed** in the visual card editor.
