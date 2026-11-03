@@ -1,7 +1,7 @@
 /* HA_auto_device_phase_mapping v1.6.2 — shared Home Assistant panel and dashboard card. */
 (() => {
   'use strict';
-  const VERSION = '1.6.2';
+  const VERSION = '1.6.3';
   const PHASES = ['L1', 'L2', 'L3'];
   const esc = value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
   const fmtW = value => value == null || !Number.isFinite(Number(value)) ? '—' : `${Math.round(Number(value)).toLocaleString()} W`;
@@ -428,14 +428,15 @@ this._loading=false;this._busy=false;this._error='';this._message='';this._lastF
       this._refreshTimer=null;this._autoTimer=null;this._saveMismatch=[];this._draftRevision=0;this._serverRevision=0;this._confirmReset=false;this._resetAcknowledged=false;this._resetDeviceTarget=null;this._saveState='saved';
     }
     setConfig(config){this._config=config||{};this._render();}
+    static getConfigElement(){return document.createElement('phase-mapper-card-editor');}
     set hass(value){
       this._hass=value;
       // Update only the tiny value labels; never rebuild an open select or reset scroll.
       if (this._tab==='settings') this._updateLiveReadings();
       if (value?.callWS && !this._loading && Date.now()-this._lastFetch>this._refreshMs()) this._fetch();
     }
-    getCardSize(){return 7;}
-    static getStubConfig(){return {};}
+    getCardSize(){return this._config?.view==='detailed'?7:5;}
+    static getStubConfig(){return {view:'compact'};}
     connectedCallback(){this._pmTrackInteraction();this._render();this._startRefresh();if(this._hass)this._fetch();}
     disconnectedCallback(){if(this._refreshTimer!==null){clearInterval(this._refreshTimer);this._refreshTimer=null;}if(this._dirty&&!this._busy)void this._autosave();}
     _refreshMs(){return 1000*(Number(this._draft?.dashboard_refresh_seconds ?? this._data?.settings?.dashboard_refresh_seconds)||2);}
@@ -545,6 +546,18 @@ this._loading=false;this._busy=false;this._error='';this._message='';this._lastF
       const native=this._hass?.states?.[entityId]?.attributes?.icon;
       return validMdi(native)?native:'mdi:power-plug';
     }
+    _batterySoc(phase){
+      const sources=this._data?.settings?.battery_sources?.[phase]||[];
+      const values=sources.map(source=>{
+        const entity=source.soc_entity_id;
+        const state=entity?this._hass?.states?.[entity]:null;
+        const number=Number(state?.state);
+        return state && !['unknown','unavailable',''].includes(state.state)
+          && Number.isFinite(number) && number>=0 && number<=100
+          ? Math.round(number)+'%' : null;
+      }).filter(Boolean);
+      return values.join(' / ');
+    }
     _top(d){
       const rows=d.devices||[],included=rows.filter(r=>!r.excluded),mapped=included.filter(r=>r.phase!=='Unknown');
       const stat=(number,label)=>`<div class="metric"><strong>${number}</strong><span>${label}</span></div>`;
@@ -574,7 +587,8 @@ this._loading=false;this._busy=false;this._error='';this._message='';this._lastF
       };
       const contents=(v,p)=>{
         const [label,watts]=batteryFlow(v?.battery,p);
-        return `<div class="powerlines">${line('P1 grid power',v?.grid,p==='TOTAL'?diag(p,'grid'):d.settings.phase_sensors[p])}${line(label,watts,diag(p,'battery'))}${line('Solar generation',v?.solar,diag(p,'solar'))}${line('Sum of loads',v?.cleaned,diag(p,'cleaned'),true)}</div>`;
+        const soc=p==='TOTAL'?PHASES.map(k=>this._batterySoc(k)).filter(Boolean).join(' · '):this._batterySoc(p);
+        return `<div class="powerlines">${line('P1 grid power',v?.grid,p==='TOTAL'?diag(p,'grid'):d.settings.phase_sensors[p])}${line(soc?label+' · SoC '+soc:label,watts,diag(p,'battery'))}${line('Solar generation',v?.solar,diag(p,'solar'))}${line('Sum of loads',v?.cleaned,diag(p,'cleaned'),true)}</div>`;
       };
       const totals=Object.fromEntries(['grid','battery','solar','cleaned'].map(k=>[k,PHASES.every(p=>breakdown[p]?.[k]!=null&&Number.isFinite(breakdown[p][k]))?PHASES.reduce((sum,p)=>sum+breakdown[p][k],0):null]));
       const headroom=p=>{
@@ -823,12 +837,23 @@ this._loading=false;this._busy=false;this._error='';this._message='';this._lastF
       const est=draft.solar_phase_estimation;
       const viFields=PHASES.map(p=>`<div class="field phasefield" style="--phase-color:${({L1:'#3b82f6',L2:'#f59e0b',L3:'#a78bfa'})[p]}"><label>${p} · Inverter AC current</label><select data-solar-vi="currents" data-solar-vi-phase="${p}">${viOpts(est.currents[p],'currents')}</select>${this._liveReading(est.currents[p])}<label style="margin-top:9px">${p} · Inverter AC voltage</label><select data-solar-vi="voltages" data-solar-vi-phase="${p}">${viOpts(est.voltages[p],'voltages')}</select>${this._liveReading(est.voltages[p])}</div>`).join('');
       const colors={L1:'#3b82f6',L2:'#f59e0b',L3:'#a78bfa',TOTAL:'#14b8a6'};
-      const sourceGroups=(type,groups)=>groups.map(p=>{
+      const socOptions=selected=>{
+         const available=Object.entries(this._hass?.states||{}).filter(([id,state])=>
+           id.startsWith('sensor.') && (state.attributes?.unit_of_measurement==='%' ||
+           state.attributes?.device_class==='battery'))
+           .map(([id,state])=>[id,state.attributes?.friendly_name||id])
+           .sort((a,b)=>a[1].localeCompare(b[1]));
+         if(selected&&!available.some(([id])=>id===selected))
+           available.unshift([selected,selected+' (unavailable)']);
+         return '<option value="">No SoC sensor</option>'+available.map(([id,name])=>
+           `<option value="${esc(id)}" ${id===selected?'selected':''}>${esc(name)} (${esc(id)})</option>`).join('');
+       };
+       const sourceGroups=(type,groups)=>groups.map(p=>{
         const items=draft[type][p]||[];
         return `<div class="field phasefield sourcegroup" style="--phase-color:${colors[p]}"><label>${p==='TOTAL'?'Total 3-phase':p} · ${type==='battery_sources'?'battery':'solar'} power</label>
           ${items.map((item,i)=>`<div class="sourceentry"><select data-source-type="${type}" data-source-phase="${p}" data-source-index="${i}">${opts(item.entity_id,'Select source')}</select>
           <label class="checkline" title="Checked: discharge / generation reports positive watts"><input type="checkbox" data-source-sign="${type}" data-source-phase="${p}" data-source-index="${i}" ${item.positive?'checked':''}> +W</label>
-          <button class="btn compactbtn" data-remove-source="${type}" data-remove-phase="${p}" data-remove-index="${i}" title="Remove source">×</button>${this._liveReading(item.entity_id)}</div>`).join('')}
+          <button class="btn compactbtn" data-remove-source="${type}" data-remove-phase="${p}" data-remove-index="${i}" title="Remove source">×</button>${this._liveReading(item.entity_id)}${type==='battery_sources'?`<label class="pm-soc-label">Battery SoC sensor (optional)</label><select data-battery-soc-phase="${p}" data-battery-soc-index="${i}">${socOptions(item.soc_entity_id||'')}</select>${item.soc_entity_id?this._liveReading(item.soc_entity_id):''}`:''}</div>`).join('')}
           <button class="btn compactbtn" data-add-source="${type}" data-add-phase="${p}">+ Add ${type==='battery_sources'?'battery':'solar'}</button></div>`;
       }).join('');
       const headroomFields=PHASES.map(p=>`<div class="field phasefield" style="--phase-color:${colors[p]}"><label>${p} · P1 phase current (A)</label><select data-grid-current="${p}">${viOpts(draft.grid_current_sensors[p],'currents')}</select>${this._liveReading(draft.grid_current_sensors[p])}<label style="margin-top:8px">${p} · P1 phase voltage (V)</label><select data-grid-voltage="${p}">${viOpts(draft.grid_voltage_sensors[p],'voltages')}</select>${this._liveReading(draft.grid_voltage_sensors[p])}<label style="margin-top:8px">${p} · Maximum current (A)</label><input type="number" min="1" max="125" step="0.5" data-current-limit="${p}" value="${draft.phase_current_limits_a[p]}"></div>`).join('');
@@ -841,7 +866,7 @@ this._loading=false;this._busy=false;this._error='';this._message='';this._lastF
       const isAdmin=this._hass?.user?.is_admin!==false;
       return `<details id="settings-p1" class="settingsbox settings-collapsible" data-settings-section="p1" ${this._settingsSections.p1?'open':''}><summary class="settings-heading"><ha-icon icon="mdi:transmission-tower"></ha-icon><span>🔌 P1 measurement sources</span><ha-icon icon="mdi:chevron-down" class="settings-chevron"></ha-icon></summary><div class="settings-content"><p class="hint">Choose the individual signed P1 grid sensor for each phase.</p><div class="formgrid">${phaseSelect}</div></div></details>
       <details id="settings-headroom" class="settingsbox settings-collapsible" data-settings-section="headroom" ${this._settingsSections.headroom?'open':''}><summary class="settings-heading"><ha-icon icon="mdi:gauge"></ha-icon><span>📊 Main connection phase headroom</span><ha-icon icon="mdi:chevron-down" class="settings-chevron"></ha-icon></summary><div class="settings-content"><p class="hint">Choose grid-meter current and voltage sensors (not SolarEdge inverter sensors). Set your main fuse limit for each phase. This display is monitoring-only, using measured grid current—not cleaned household watts.</p><div class="formgrid">${headroomFields}</div><p class="hint">Green below 70%, amber 70–90%, red at 90% or higher. These are visual warnings, not electrical protection.</p></div></details>
-      <details id="settings-battery" class="settingsbox settings-collapsible" data-settings-section="battery" ${this._settingsSections.battery?'open':''}><summary class="settings-heading"><ha-icon icon="mdi:battery-charging"></ha-icon><span>🔋 Battery compensation</span><ha-icon icon="mdi:chevron-down" class="settings-chevron"></ha-icon></summary><div class="settings-content"><p class="hint">Add multiple battery power sensors per phase. Each +W box sets that source's discharge sign; uncheck if discharging is negative.</p><div class="formgrid">${sourceGroups('battery_sources',PHASES)}</div></div></details>
+      <details id="settings-battery" class="settingsbox settings-collapsible" data-settings-section="battery" ${this._settingsSections.battery?'open':''}><summary class="settings-heading"><ha-icon icon="mdi:battery-charging"></ha-icon><span>🔋 Battery compensation</span><ha-icon icon="mdi:chevron-down" class="settings-chevron"></ha-icon></summary><div class="settings-content"><p class="hint">Add multiple battery power sensors per phase. Each +W box sets that source's discharge sign; uncheck if discharging is negative. Optional SoC sensors are displayed only and never used for learning.</p><div class="formgrid">${sourceGroups('battery_sources',PHASES)}</div></div></details>
       <details id="settings-solar" class="settingsbox settings-collapsible" data-settings-section="solar" ${this._settingsSections.solar?'open':''}><summary class="settings-heading"><ha-icon icon="mdi:solar-power"></ha-icon><span>☀️ Solar compensation</span><ha-icon icon="mdi:chevron-down" class="settings-chevron"></ha-icon></summary><div class="settings-content"><p class="hint">Add phase-specific solar sensors, or add total three-phase generation under TOTAL (divided equally between phases). Do not select the same production twice.</p><div class="formgrid">${sourceGroups('solar_sources',[...PHASES,'TOTAL'])}</div></div></details>
       <details id="settings-estimate" class="settingsbox settings-collapsible" data-settings-section="estimate" ${this._settingsSections.estimate?'open':''}><summary class="settings-heading"><ha-icon icon="mdi:chart-bell-curve-cumulative"></ha-icon><span>☀️ SolarEdge phase power estimation</span><ha-icon icon="mdi:chevron-down" class="settings-chevron"></ha-icon></summary><div class="settings-content">
       <p class="hint">Optional: distribute your measured three-phase inverter AC power using each phase's AC voltage × current. The shares are normalized to the real inverter total, not calculated as V × I watts. Assumes approximately equal phase power factors; these are estimates.</p>
@@ -1201,6 +1226,11 @@ this._loading=false;this._busy=false;this._error='';this._message='';this._lastF
       });
     }
     _wire(){
+      this.shadowRoot.querySelectorAll('[data-battery-soc-phase]').forEach(select=>
+        select.addEventListener('change',()=>{
+          const item=this._draft?.battery_sources?.[select.dataset.batterySocPhase]?.[Number(select.dataset.batterySocIndex)];
+          if(item){item.soc_entity_id=select.value;this._markDirty();}
+        }));
       if(this._pmSkipWire){this._pmSkipWire=false;return;}
       const root=this.shadowRoot;
       this._wireIconPicker('editIcon','editIconSuggestions','editIconPreview');
