@@ -623,8 +623,12 @@ this._loading=false;this._busy=false;this._error='';this._message='';this._lastF
       };
       const contents=(v,p)=>{
         const [label,watts]=batteryFlow(v?.battery,p);
+        const relevant=p==='TOTAL'?PHASES:[p];
+        const batteryConfigured=relevant.some(phase=>(d.settings.battery_sources?.[phase]||[]).some(source=>!!source.entity_id));
+        const solarConfigured=relevant.some(phase=>(d.settings.solar_sources?.[phase]||[]).some(source=>!!source.entity_id))
+          ||(d.settings.solar_sources?.TOTAL||[]).some(source=>!!source.entity_id);
         const soc=p==='TOTAL'?PHASES.map(k=>this._batterySoc(k)).filter(Boolean).join(' · '):this._batterySoc(p);
-        return `<div class="powerlines">${line('P1 grid power',v?.grid,p==='TOTAL'?diag(p,'grid'):d.settings.phase_sensors[p])}${line(soc?label+' · SoC '+soc:label,watts,diag(p,'battery'))}${line('Solar generation',v?.solar,diag(p,'solar'))}${line('Sum of loads',v?.cleaned,diag(p,'cleaned'),true)}</div>`;
+        return `<div class="powerlines">${line('P1 grid power',v?.grid,p==='TOTAL'?diag(p,'grid'):d.settings.phase_sensors[p])}${batteryConfigured?line(soc?label+' · SoC '+soc:label,watts,diag(p,'battery')):''}${solarConfigured?line('Solar generation',v?.solar,diag(p,'solar')):''}${line('Sum of loads',v?.cleaned,diag(p,'cleaned'),true)}</div>`;
       };
       const totals=Object.fromEntries(['grid','battery','solar','cleaned'].map(k=>[k,PHASES.every(p=>breakdown[p]?.[k]!=null&&Number.isFinite(breakdown[p][k]))?PHASES.reduce((sum,p)=>sum+breakdown[p][k],0):null]));
       const headroom=p=>{
@@ -855,7 +859,9 @@ this._loading=false;this._busy=false;this._error='';this._message='';this._lastF
       const breakdown=d.power_breakdown||{};
       const included=(d.devices||[]).filter(r=>!r.excluded);
       const devices=phase=>included.filter(r=>r.phase===phase);
-      const source=d.settings?.battery_sources||{};
+      const batteryConfigured=p=>(d.settings?.battery_sources?.[p]||[]).some(source=>!!source.entity_id);
+      const solarConfigured=p=>(d.settings?.solar_sources?.[p]||[]).some(source=>!!source.entity_id)
+        ||(d.settings?.solar_sources?.TOTAL||[]).some(source=>!!source.entity_id);
       const phaseTile=p=>{
         const v=breakdown[p]||{};
         const h=d.grid_headroom?.[p];
@@ -868,8 +874,8 @@ this._loading=false;this._busy=false;this._error='';this._message='';this._lastF
         const unknown=v.cleaned==null?null:Math.max(0,Number(v.cleaned)-assigned);
         return `<section class="pm-compact-phase pm-${p.toLowerCase()}"><header><b>${p}</b><small>${count} mapped</small></header>
           <div class="pm-compact-line"><span>P1 grid power</span><strong>${fmtW(v.grid)}</strong></div>
-          <div class="pm-compact-line"><span>Battery ${soc?'· SoC '+esc(soc):''}</span><strong>${fmtW(v.battery)}</strong></div>
-          <div class="pm-compact-line"><span>Solar generation</span><strong>${fmtW(v.solar)}</strong></div>
+          ${batteryConfigured(p)?`<div class="pm-compact-line"><span>Battery ${soc?'· SoC '+esc(soc):''}</span><strong>${fmtW(v.battery)}</strong></div>`:'' }
+          ${solarConfigured(p)?`<div class="pm-compact-line"><span>Solar generation</span><strong>${fmtW(v.solar)}</strong></div>`:'' }
           <div class="pm-compact-line pm-compact-sum"><span>Sum of loads</span><strong>${fmtW(v.cleaned)}</strong></div>
           <div class="pm-compact-headroom"><span>Grid current · ${current}</span><div class="pm-compact-track"><i style="width:${used}%"></i></div></div>
           <div class="pm-compact-line"><span>Unknown devices</span><strong>${fmtW(unknown)}</strong></div>
