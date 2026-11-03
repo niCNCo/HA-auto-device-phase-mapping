@@ -1,7 +1,7 @@
 /* HA_auto_device_phase_mapping v1.6.2 — shared Home Assistant panel and dashboard card. */
 (() => {
   'use strict';
-  const VERSION = '1.6.3';
+  const VERSION = '1.6.4';
   const PHASES = ['L1', 'L2', 'L3'];
   const esc = value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
   const fmtW = value => value == null || !Number.isFinite(Number(value)) ? '—' : `${Math.round(Number(value)).toLocaleString()} W`;
@@ -257,6 +257,7 @@
     .native-icon-field:not(:defined){display:none}
     .native-icon-field:defined + .icon-choice-container{display:none}
     .version-link{background:transparent;border:0;color:var(--primary-color);padding:0;text-decoration:underline;font-weight:700;cursor:pointer}
+    .version-link.version-current{color:#22c55e}.version-link.version-outdated{color:#ef4444}.version-link.version-unverified{color:var(--secondary-text-color)}
     .version-status{font-size:12px}.version-status.current{color:#22c55e}.version-status.outdated{color:#ef4444}.version-status.unverified{color:var(--secondary-text-color)}
     @media(max-width:390px){.navmenu{font-size:16px;min-width:15px}.page{padding:0}.surface{padding:9px}.topnav{gap:2px;padding:0 4px;min-height:43px}.topbrand .mini-logo{width:21px;height:21px}.navtab{font-size:9.5px;padding:9px 3px}.topstat{min-width:35px;width:35px;padding:4px 0}.topstat strong{font-size:13px}.topstat span{font-size:7.5px}.topstats{gap:2px}.sensor-actions select{width:79px}.sensor-actions button{min-width:54px;font-size:10px;padding:6px}}
 
@@ -458,7 +459,7 @@
       // One shared toggle ensures the same summary alignment in all four power tiles.
       this._phaseMappedExpanded=true;
       try{const preference=window.localStorage?.getItem('ha_auto_device_phase_mapping.mappedExpanded');if(preference!==null&&preference!==undefined)this._phaseMappedExpanded=preference==='true';}catch(_err){}
-      this._editor=null;this._versionDialog=false;this._releaseStatus=null;this._lastReleaseCheck=0;this._releaseLoading=false;
+      this._editor=null;this._versionDialog=false;this._releaseStatus=null;this._lastReleaseCheck=0;this._releaseLoading=false;this._releaseTimer=null;
 this._loading=false;this._busy=false;this._error='';this._message='';this._lastFetch=0;
       this._pmSkipWire=false;this._pmLastInteraction=0;this._pmTrackingInstalled=false;this._pmPendingStructure=false;
       this._refreshTimer=null;this._autoTimer=null;this._saveMismatch=[];this._draftRevision=0;this._serverRevision=0;this._confirmReset=false;this._resetAcknowledged=false;this._resetDeviceTarget=null;this._saveState='saved';
@@ -473,8 +474,8 @@ this._loading=false;this._busy=false;this._error='';this._message='';this._lastF
     }
     getCardSize(){return this._config?.view==='detailed'?7:5;}
     static getStubConfig(){return {view:'compact'};}
-    connectedCallback(){this._pmTrackInteraction();this._render();this._startRefresh();if(this._hass)this._fetch();}
-    disconnectedCallback(){if(this._refreshTimer!==null){clearInterval(this._refreshTimer);this._refreshTimer=null;}if(this._dirty&&!this._busy)void this._autosave();}
+    connectedCallback(){this._pmTrackInteraction();this._render();this._startRefresh();void this._checkLatestRelease();if(this._releaseTimer===null)this._releaseTimer=setInterval(()=>{if(this.isConnected)void this._checkLatestRelease();},3*60*60*1000);if(this._hass)this._fetch();}
+    disconnectedCallback(){if(this._refreshTimer!==null){clearInterval(this._refreshTimer);this._refreshTimer=null;}if(this._releaseTimer!==null){clearInterval(this._releaseTimer);this._releaseTimer=null;}if(this._dirty&&!this._busy)void this._autosave();}
     _refreshMs(){return 1000*(Number(this._draft?.dashboard_refresh_seconds ?? this._data?.settings?.dashboard_refresh_seconds)||2);}
     _startRefresh(){
       if(this._refreshTimer!==null)clearInterval(this._refreshTimer);
@@ -706,7 +707,7 @@ this._loading=false;this._busy=false;this._error='';this._message='';this._lastF
       const header=`<nav class="topnav" aria-label="Phase Mapper navigation"><${this.full?'button':'div'} class="topbrand" ${this.full?'id="menu" aria-label="Open Home Assistant sidebar"':''} title="Automatic Phase Mapper · Passive Load Discovery · v${esc(d.version)}">
         <img class="wide-logo" src="/ha_auto_device_phase_mapping_static/brand/${logoTheme}logo@2x.png?v=${VERSION}" alt="Automatic Phase Mapper" />
         <img class="mini-logo" src="/ha_auto_device_phase_mapping_static/brand/${logoTheme}icon.png?v=${VERSION}" alt="Phase Mapper" /></${this.full?'button':'div'}>
-        <div class="navtabs">${tabs}</div><span class="topstatus"><span class="statusdot" style="${d.settings.learning_enabled?'':'background:#f59e0b'}"></span>${d.settings.learning_enabled?'Learning':'Paused'} · <button class="version-link" id="topVersionLink" title="Open GitHub repository">v${VERSION}</button></span><div class="topstats">${statCard(rows.length,'Detected','#94a3b8')}${statCard(mapped.length,'Mapped','#22c55e')}${statCard(rows.filter(r=>r.excluded).length,'Excluded','#94a3b8')}</div></nav>`;
+        <div class="navtabs">${tabs}</div><span class="topstatus"><span class="statusdot" style="${d.settings.learning_enabled?'':'background:#f59e0b'}"></span>${d.settings.learning_enabled?'Learning':'Paused'} · <button class="version-link version-${this._releaseStatus?.status||'unverified'}" id="topVersionLink" title="${esc(this._releaseStatus?.note||'Release not checked')}">v${VERSION}</button></span><div class="topstats">${statCard(rows.length,'Detected','#94a3b8')}${statCard(mapped.length,'Mapped','#22c55e')}${statCard(rows.filter(r=>r.excluded).length,'Excluded','#94a3b8')}</div></nav>`;
       return header+(this._tab==='mapping'?phaseGrid+`${this.full&&d.settings.solar_phase_estimation?.enabled?`<p class="hint">SolarEdge phase allocation: ${d.solar_estimation_status==='estimated'?'estimated from inverter V × I proportions, normalized to total AC power':d.solar_estimation_status==='fallback_equal'?'SolarEdge phase measurements unavailable; equal split shown as an estimate, learning paused':d.solar_estimation_status==='zero_generation'?'solar production near zero':d.solar_estimation_status==='solar_source_unavailable'?'solar source unavailable — learning paused':'using equal third allocation'}. Phase allocations assume similar power factors.</p>`:''}`:'');
     }
     _batterySystemRows(phase){
