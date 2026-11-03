@@ -7,7 +7,7 @@ vm.createContext(c);vm.runInContext(src,c);
 (async()=>{
  const el=new (classes.get('phase-mapper-panel'))();el.tagName='PHASE-MAPPER-PANEL';
  const settings={excluded:[],phase_sensors:{L1:'sensor.l1',L2:'sensor.l2',L3:'sensor.l3'},grid_current_sensors:{L1:'',L2:'',L3:''},grid_voltage_sensors:{L1:'',L2:'',L3:''},phase_current_limits_a:{L1:25,L2:25,L3:25},battery_sources:{L1:[],L2:[],L3:[]},solar_sources:{L1:[],L2:[],L3:[],TOTAL:[]},solar_phase_estimation:{enabled:false,currents:{L1:'',L2:'',L3:''},voltages:{L1:'',L2:'',L3:''}},learning_enabled:true,minimum_change_w:100,manual_assignments:{}};
- const calls=[];el._hass={states:{},user:{is_admin:true},callWS:async x=>{calls.push(x);settings.excluded=[...(x.excluded||settings.excluded)];return {...el._data,settings:{...settings}};}};
+ const calls=[];el._hass={states:{},user:{is_admin:true},callWS:async x=>{calls.push(x);for(const [k,v] of Object.entries(x)){if(k!=='type')settings[k]=v;}return {...el._data,settings:{...settings}};}};
  el._data={version:'1.4.0',settings,devices:[{entity_id:'sensor.test',name:'Test device',phase:'Unknown',events:3,confidence:8,power_w:25,excluded:false}],grid_headroom:{L1:{current:10,voltage:230,limit:25,remaining:15,utilization:40}}};
  el._resetDraft();el._tab='settings';el._render();
  assert(el.shadowRoot.innerHTML.includes('included-row'));

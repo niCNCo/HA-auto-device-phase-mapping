@@ -21,6 +21,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     """Register read-only and admin-only WebSocket commands once."""
     hass.data.setdefault(DOMAIN, {})
     websocket_api.async_register_command(hass, ws_get)
+    websocket_api.async_register_command(hass, ws_diagnostics)
     websocket_api.async_register_command(hass, ws_set)
     return True
 
@@ -103,6 +104,18 @@ def ws_get(hass, connection, msg) -> None:
     connection.send_result(msg["id"], engine.export())
 
 
+@websocket_api.websocket_command({vol.Required("type"): "ha_auto_device_phase_mapping/diagnostics"})
+@websocket_api.require_admin
+@callback
+def ws_diagnostics(hass, connection, msg) -> None:
+    """Admin-only, on-demand data export. Never uploaded automatically."""
+    engine = get_engine(hass)
+    if engine is None:
+        connection.send_error(msg["id"], "not_ready", "Phase Mapper is not ready")
+        return
+    connection.send_result(msg["id"], engine.diagnostics_export())
+
+
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "ha_auto_device_phase_mapping/set",
@@ -125,11 +138,17 @@ def ws_get(hass, connection, msg) -> None:
         vol.Optional("grid_voltage_sensors"): {vol.Required(p): str for p in ("L1", "L2", "L3")},
         vol.Optional("phase_current_limits_a"): {vol.Required(p): vol.Coerce(float) for p in ("L1", "L2", "L3")},
         vol.Optional("manual_assignments"): {str: str},
+        vol.Optional("manual_devices"): [dict],
+        vol.Optional("timing_overrides"): {str: str},
+        vol.Optional("display_names"): {str: str},
+        vol.Optional("display_icons"): {str: str},
+        vol.Optional("dashboard_refresh_seconds"): vol.In([1,2,5,10,30]),
         vol.Optional("battery_discharge_positive"): bool,
         vol.Optional("solar_production_positive"): bool,
         vol.Optional("learning_enabled"): bool,
         vol.Optional("minimum_change_w"): vol.All(int, vol.Range(min=30, max=2000)),
         vol.Optional("reset"): bool,
+        vol.Optional("reset_device"): str,
     }
 )
 @websocket_api.require_admin
@@ -140,11 +159,15 @@ async def ws_set(hass, connection, msg) -> None:
     if engine is None:
         connection.send_error(msg["id"], "not_ready", "Phase Mapper is not ready")
         return
+    changes = {key: value for key, value in msg.items() if key not in ("id", "type")}
     try:
-        await engine.update_settings(
-            {key: value for key, value in msg.items() if key not in ("id", "type")}
-        )
+        await engine.update_settings(changes)
     except ValueError as err:
         connection.send_error(msg["id"], "invalid_settings", str(err))
         return
-    connection.send_result(msg["id"], engine.export())
+    # update_settings awaits .storage persistence before returning. Confirm
+    # that the requested write was committed; don't make clients guess based
+    # on JSON key order when comparing large display name/icon dictionaries.
+    response = engine.export()
+    response["save_ack"] = {"committed": True, "fields": sorted(changes)}
+    connection.send_result(msg["id"], response)

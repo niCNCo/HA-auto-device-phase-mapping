@@ -10,13 +10,13 @@ e._data={version:'1.4.4',settings:{learning_enabled:true,phase_sensors:{L1:'sens
 e._resetDraft();e._render();
 assert(e.shadowRoot.innerHTML.includes('Battery net flow'));
 assert(e.shadowRoot.innerHTML.includes('500 W'));
-assert(e.shadowRoot.innerHTML.includes('Battery A'));
-assert(e.shadowRoot.innerHTML.includes('Battery B'));
-assert(e.shadowRoot.innerHTML.includes('System assigned'));
-assert(e.shadowRoot.innerHTML.includes('800 W'));
+// v1.5: battery power remains in the summary but battery rows are removed.
+assert(!e.shadowRoot.innerHTML.includes('System assigned'));
+assert(!e.shadowRoot.innerHTML.includes('Battery A'));
+assert(e.shadowRoot.innerHTML.includes('phase-devices'));
 e._tab='settings';e._render();
 assert(e.shadowRoot.innerHTML.includes('data-live-entity="sensor.battery_a"'));
 assert(e.shadowRoot.innerHTML.includes('data-live-entity="sensor.battery_b"'));
 assert(e.shadowRoot.innerHTML.includes('Dashboard update interval'));
 assert(e.shadowRoot.innerHTML.includes('2 seconds'));
-console.log('v1.4.4 battery system rows, charging labels, live source fields and refresh controls passed');
+console.log('v1.5 battery summaries without mapped rows and settings source fields passed');

@@ -26,12 +26,12 @@ for(const type of ['phase-mapper-card','phase-mapper-panel']){
  e._resetDraft();e._render();
  assert(e.shadowRoot.innerHTML.includes('Test heater'));
  e._tab='settings';e._render();
- assert(e.shadowRoot.innerHTML.includes('Excluded sensors'));
+ assert(e.shadowRoot.innerHTML.includes('Recognized Power Sensors'));
  assert(e.shadowRoot.innerHTML.includes('Show excluded'));
  assert(e.shadowRoot.innerHTML.includes('Add battery'));
  assert(e.shadowRoot.innerHTML.includes('Add solar')); 
  assert(e.shadowRoot.innerHTML.includes('Battery compensation'));  
- if(type==='phase-mapper-panel')assert(e.shadowRoot.innerHTML.includes('Household total'));
- if(type==='phase-mapper-panel')assert(e.shadowRoot.innerHTML.includes('Battery compensation')); 
+ if(type==='phase-mapper-panel'){ e._tab='mapping';e._render();assert(e.shadowRoot.innerHTML.includes('Household total')); }
+ 
 }
 console.log('Frontend registration, card, full panel, and settings smoke tests passed');

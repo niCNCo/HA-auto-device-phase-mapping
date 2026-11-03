@@ -1,0 +1,33 @@
+'use strict';
+// v1.5.3: compact selectors, readable wrapped names, aligned bars, conditional aggregate.
+const assert=require('assert'),fs=require('fs'),vm=require('vm');
+const source=fs.readFileSync('custom_components/ha_auto_device_phase_mapping/frontend/phase-mapper.js','utf8');
+const registry=new Map();
+class Element{constructor(){this.tagName='PHASE-MAPPER-PANEL';}attachShadow(){return this.shadowRoot={innerHTML:'',querySelector:()=>null,querySelectorAll:()=>[]};}}
+const env={HTMLElement:Element,customElements:{get:k=>registry.get(k),define:(k,v)=>registry.set(k,v)},window:{customCards:[],matchMedia:()=>({matches:true})},Date,Math,Number,String,Intl,Set,Map,Event,console,setTimeout,clearTimeout};
+vm.createContext(env);vm.runInContext(source,env);
+const ui=new (registry.get('phase-mapper-panel'))();
+ui._hass={states:{},themes:{darkMode:true},user:{is_admin:true}};
+const settings={phase_sensors:{L1:'a',L2:'b',L3:'c'},grid_current_sensors:{},grid_voltage_sensors:{},phase_current_limits_a:{},excluded:[],manual_assignments:{},manual_devices:[{id:'coffee',name:'Coffee maker',room:'Kitchen',phase:'L1',icon:'mdi:coffee-maker'}],display_names:{},display_icons:{},solar_phase_estimation:{},battery_sources:{L1:[],L2:[],L3:[]},solar_sources:{},timing_overrides:{}};
+const phase=w=>({grid:w,battery:0,solar:0,cleaned:w});
+ui._data={version:'1.5.3',settings,devices:[{entity_id:'sensor.heater',name:'Infra heater Yara',phase:'L3',power_w:500,events:6,confidence:75,excluded:false}],corrected_power:{L1:600,L2:200,L3:1000},power_breakdown:{L1:phase(600),L2:phase(200),L3:phase(1000)},grid_headroom:{}};
+ui._resetDraft();
+ui._phaseMappedExpanded=true;
+let html=ui._top(ui._data);
+assert(html.includes('v1.5.3'));
+assert.equal((html.match(/class="mapped-summary-wrap" hidden/g)||[]).length,4,'expanded mode hides all aggregate summaries');
+assert.equal((html.match(/class="mapped-listing" >/g)||[]).length,4,'expanded mode shows all individual lists');
+assert(html.includes('data-manual-phase="coffee"')&&html.includes('data-assign="sensor.heater"'));
+assert(source.includes('width:86px!important')&&source.includes('height:28px!important'));
+assert(source.includes('-webkit-line-clamp:2')&&source.includes('overflow-wrap:normal'));
+assert(source.includes('@container (max-width:250px)'));
+assert(source.includes('min-height:6px!important;max-height:6px!important'));
+assert(source.includes('.unknown-load .unknown-title{color:var(--primary-text-color)'));
+assert(source.includes('.unknown-load .devpower,.unknown-load .contrib{color:var(--secondary-text-color)'));
+ui._phaseMappedExpanded=false;
+html=ui._top(ui._data);
+assert.equal((html.match(/class="mapped-summary-wrap" >/g)||[]).length,4,'collapsed mode shows all aggregate summaries');
+assert.equal((html.match(/class="mapped-listing" hidden/g)||[]).length,4,'collapsed mode hides individual lists');
+assert(html.includes('500 W <span class="contrib">· 50.0%</span>'));
+assert(html.includes('500 W <span class="contrib">· 27.8%</span>'));
+console.log('v1.5.3 conditional aggregate, compact selector, wrapping, color and bars passed');

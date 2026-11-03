@@ -3,7 +3,7 @@
 from copy import deepcopy
 
 DOMAIN = "ha_auto_device_phase_mapping"
-VERSION = "1.4.4"
+VERSION = "1.6.2"
 PLATFORMS = ["sensor"]
 PHASES = ("L1", "L2", "L3")
 FRONTEND_PATH = "/ha_auto_device_phase_mapping_static/phase-mapper.js"
@@ -21,10 +21,15 @@ DEFAULT_SETTINGS = {
     "solar_sources": {"L1": [], "L2": [], "L3": [], "TOTAL": []},
     "solar_phase_estimation": {"enabled": False, "currents": {"L1": "", "L2": "", "L3": ""}, "voltages": {"L1": "", "L2": "", "L3": ""}},
     "manual_assignments": {},
+    "manual_devices": [],
+    "timing_overrides": {},
+    "display_names": {},
+    "display_icons": {},
     "evidence_archive": [],
     "solar_sensor": "",
     "solar_production_positive": True,
-    "minimum_change_w": 100,
+    "minimum_change_w": 50,
+    "learning_155_migrated": False,
     "tolerance_ratio": 0.30,
     "window_seconds": 4.0,
     "learning_enabled": True,
