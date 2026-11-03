@@ -39,7 +39,7 @@
     .pm-ring-wrap{display:grid;grid-template-columns:minmax(0,1fr);gap:13px;min-width:0}
     .pm-ring-graphic{width:min(100%,248px);aspect-ratio:1;position:relative;margin:0 auto}
     .pm-ring-graphic svg{display:block;width:100%;height:100%;overflow:visible}
-    .pm-ring-glow{filter:drop-shadow(0 0 2px currentColor);stroke-linecap:butt}
+    .pm-ring-glow{stroke-linecap:butt}
     .pm-ring-center{position:absolute;inset:25%;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;gap:3px}
     .pm-ring-center strong{font-size:clamp(20px,1.7vw,25px);white-space:nowrap;letter-spacing:-.5px;font-variant-numeric:tabular-nums}
     .pm-ring-center span{font-size:11px;color:var(--secondary-text-color);white-space:nowrap}
@@ -884,7 +884,7 @@ this._loading=false;this._busy=false;this._error='';this._message='';this._lastF
           const offset=-cursor*circumference;
           cursor+=fraction;
           if(length<=0.1)return '';
-          return `<circle cx="60" cy="60" r="${radius}" fill="none" stroke="${colors[index]}" stroke-width="9" stroke-dasharray="${Math.max(0,length-.8)} ${circumference}" stroke-dashoffset="${offset}" transform="rotate(-90 60 60)" class="pm-ring-glow"/>`;
+          return `<circle cx="60" cy="60" r="${radius}" fill="none" stroke="${colors[index]}" stroke-width="9" stroke-dasharray="${Math.max(0,length-.8)} ${circumference}" stroke-dashoffset="${offset}" transform="rotate(-90 60 60)" class="pm-ring-glow" style="filter:drop-shadow(0 0 3px ${colors[index]})"/>`;
         }).join('');
       };
       const legend=(label,watts,color)=>`<div class="pm-ring-legend"><span><i style="background:${color}"></i>${esc(label)}</span><strong>${measured?fmtW(watts):'—'} <small>${measured?percent(watts):'—'}</small></strong></div>`;
