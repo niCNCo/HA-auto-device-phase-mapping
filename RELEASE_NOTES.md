@@ -1,3 +1,14 @@
+# v1.6.3 — Lovelace layouts, household power rings and optional battery SoC
+
+- Added a **Compact** Lovelace card with L1/L2/L3 and Household total, including live phase loads, grid current headroom, unknown load estimates and expandable mapped devices. The previous list remains available as **Detailed** in the visual card editor.
+- Added a restrained dual-ring Household total graph to both the compact card and main dashboard. Outer ring = share of load on L1/L2/L3; inner ring = mapped, unknown and not-yet-mapped coverage. Ring segments have subtle glow.
+- Added optional battery SoC sensor selectors for each configured battery power source. Show known percentages alongside battery power. **No battery? No solar?** The corresponding power lines are omitted from the card and Mapping overview.
+- The percentage selectors do not influence the phase-correlation engine or battery/solar compensation; changing SoC alone does not invalidate learned evidence.
+- Keeps the original four-column Mapping layout and Home Assistant iOS scroll-stability behavior. No migration or learning reset is intended.
+- This release is a beta; backup your Home Assistant configuration and test the dashboard and card with real sensors.
+
+---
+
 # v1.6.2 — iOS dashboard flicker and scroll stability
 
 - Fix the Home Assistant iOS Companion app repeatedly jumping or flickering while scrolling: automatic refreshes now update existing text, values, colors and meter bars **without replacing the entire dashboard DOM**.
