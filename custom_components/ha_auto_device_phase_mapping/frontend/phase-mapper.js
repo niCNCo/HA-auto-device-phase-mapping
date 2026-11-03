@@ -14,6 +14,42 @@
   const css = `<style>
     :host{display:block;color:var(--primary-text-color);--pm-primary:var(--primary-color,#4588d3);--pm-green:#3fa788;--pm-yellow:#f5ad4e;--pm-purple:#a489cf;--pm-border:var(--divider-color,#ddd);font-family:var(--paper-font-body1_-_font-family,Roboto,sans-serif)}
     *,*:before,*:after{box-sizing:border-box}
+
+    .pm-compact-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}
+    .pm-compact-heading{display:flex;justify-content:space-between;gap:8px;margin-bottom:10px;font-size:13px}
+    .pm-compact-heading span{color:var(--secondary-text-color);font-size:11px}
+    .pm-compact-phase{--pm-phase:#14b8a6;background:color-mix(in srgb,var(--pm-phase) 8%,var(--card-background-color,#181818));border:1px solid color-mix(in srgb,var(--pm-phase) 42%,transparent);border-top:3px solid var(--pm-phase);border-radius:9px;padding:12px;min-width:0}
+    .pm-l1{--pm-phase:#3b82f6}.pm-l2{--pm-phase:#f59e0b}.pm-l3{--pm-phase:#a78bfa}.pm-total{--pm-phase:#14b8a6}
+    .pm-compact-phase>header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:9px;gap:6px;color:var(--pm-phase)}
+    .pm-compact-phase>header small{font-size:10px;color:var(--secondary-text-color)}
+    .pm-compact-line{display:flex;justify-content:space-between;gap:7px;font-size:11px;line-height:1.9}
+    .pm-compact-line span{color:var(--secondary-text-color);overflow-wrap:anywhere}
+    .pm-compact-line strong{white-space:nowrap}
+    .pm-compact-sum{border-top:1px solid var(--pm-border);padding-top:5px;margin-top:5px;color:var(--pm-phase)}
+    .pm-compact-sum strong{font-size:15px}
+    .pm-compact-headroom{font-size:10px;margin:8px 0;color:var(--secondary-text-color)}
+    .pm-compact-track{height:5px;border-radius:10px;overflow:hidden;background:color-mix(in srgb,var(--pm-phase) 14%,var(--card-background-color));margin-top:4px}
+    .pm-compact-track i{height:100%;display:block;background:var(--pm-phase);border-radius:10px}
+    .pm-compact-devices{margin-top:8px;padding-top:7px;border-top:1px solid var(--pm-border);font-size:11px}
+    .pm-compact-devices summary{cursor:pointer;font-weight:600}
+    .pm-compact-footer{text-align:right;margin-top:11px;font-size:12px}
+    .pm-ring-wrap{display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:center}
+    .pm-ring-graphic{width:170px;height:170px;position:relative;flex:0 0 170px;max-width:100%}
+    .pm-ring-graphic svg{display:block;width:100%;height:100%}
+    .pm-ring-glow{filter:drop-shadow(0 0 2px currentColor);stroke-linecap:butt}
+    .pm-ring-center{position:absolute;inset:24%;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center}
+    .pm-ring-center strong{font-size:19px;white-space:nowrap;letter-spacing:-.3px}
+    .pm-ring-center span{font-size:10px;color:var(--secondary-text-color)}
+    .pm-ring-legends{flex:1 1 175px;min-width:0}
+    .pm-ring-label{font-weight:600;font-size:10px;color:var(--secondary-text-color);margin:6px 0 3px}
+    .pm-ring-legend{display:flex;justify-content:space-between;align-items:baseline;gap:6px;font-size:10px;padding:2px 0}
+    .pm-ring-legend span{display:flex;align-items:center;gap:5px;min-width:0}
+    .pm-ring-legend i{height:7px;width:7px;display:inline-block;border-radius:50%;flex:none}
+    .pm-ring-legend strong{white-space:nowrap;font-size:10px}.pm-ring-legend small{color:var(--secondary-text-color);font-weight:400}
+    .pm-household-graphic{margin:12px 0;padding:10px 3px;border-top:1px solid var(--pm-border)}
+    .pm-household-graphic .pm-ring-graphic{width:145px;height:145px;flex-basis:145px}
+    @media(max-width:1150px){.pm-compact-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+    @media(max-width:570px){.pm-compact-grid{grid-template-columns:1fr}.pm-ring-wrap{justify-content:space-evenly}}
     .page{padding:16px 16px 56px;max-width:1450px;margin:0 auto}.surface{background:var(--card-background-color,#fff);box-shadow:var(--ha-card-box-shadow,0 1px 4px #0001);border-radius:var(--ha-card-border-radius,14px);padding:20px}
     .card{display:block}.card .surface{padding:16px}.paneltop{background:var(--app-header-background-color,var(--primary-color,#1864a8));color:var(--text-primary-color,#fff);padding:12px 20px;display:flex;align-items:center;gap:12px}
     .paneltop h2{margin:0;font-size:19px}.drawer{background:transparent;border:0;color:inherit;font-size:24px;cursor:pointer;min-width:38px;text-align:center}
@@ -769,6 +805,82 @@ this._loading=false;this._busy=false;this._error='';this._message='';this._lastF
         <div class="diagdetail"><strong>Total accepted observations (saved):</strong> ${Number(stats.accepted_total||0)} · <strong>Saved tentative slow matches:</strong> ${Number(stats.tentative_votes_saved||0)} across ${Number(stats.tentative_devices||0)} sensors · <strong>Saved load feasibility hints:</strong> ${Number(stats.load_hints_saved||0)} · <strong>Waiting in transition queues:</strong> ${Number(stats.queued_transitions||0)} · <strong>Active learning workers:</strong> ${Number(stats.active_workers||0)} · <strong>Orphan queues:</strong> ${Number(stats.orphan_queues||0)} · <strong>In-flight evaluations:</strong> ${Number(stats.inflight_evaluations||0)} · <strong>Oldest worker:</strong> ${Number(stats.oldest_pending_seconds||0).toFixed(0)} s.</div>
         <div class="diagdetail">Rejection and transition counters are <strong>since restart</strong>. v1.6.1 adds two independent watchdog checks (1 s and 15 s), stalled-worker cancellation, retries of interrupted steps, bounded queue compaction, and a frontend/backend version mismatch warning. The existing staged fast heating-pulse matching remains enabled. Accepted observations and tentative slow-sensor matches are stored across restarts. Tentative ON/OFF matches and repeated ON-load hints are not proof of a phase; they expire after 14 days. They never assign a phase automatically without accepted correlation evidence. A clean corrected-power history must be rebuilt after startup. v1.5.5 uses a default 50 W change floor and compares averages across independent ON/OFF reporting periods when exact step matching fails. Click Export to download recent corrected phase power and device reports for debugging; the export includes entity names and usage timestamps.</div>
       </details>`;
+    }
+
+    _householdRing(d){
+      const breakdown=d.power_breakdown||{};
+      const phases=PHASES.map(p=>Math.max(0,Number(breakdown[p]?.cleaned)||0));
+      const measured=PHASES.every(p=>Number.isFinite(Number(breakdown[p]?.cleaned)));
+      const total=phases.reduce((sum,v)=>sum+v,0);
+      const included=(d.devices||[]).filter(r=>!r.excluded);
+      const watt=r=>Math.max(0,Number(r.power_w)||0);
+      const threePhase=included.filter(r=>r.phase==='3-phase').reduce((sum,r)=>sum+watt(r),0)/3;
+      const mapped=PHASES.reduce((sum,p,i)=>{
+        const assigned=included.filter(r=>r.phase===p).reduce((acc,r)=>acc+watt(r),0)+threePhase;
+        return sum+Math.min(phases[i],assigned);
+      },0);
+      const residual=Math.max(0,total-mapped);
+      const waiting=included.filter(r=>r.phase==='Unknown').reduce((sum,r)=>sum+watt(r),0);
+      const notYet=Math.min(residual,waiting);
+      const unknown=Math.max(0,residual-notYet);
+      const percent=value=>total>0?(100*value/total).toFixed(1)+'%':'0.0%';
+      const circumference=2*Math.PI*41;
+      const arcs=(values,colors,radius)=>{
+        const circumference=2*Math.PI*radius;
+        let cursor=0;
+        return values.map((watts,index)=>{
+          const fraction=total>0?Math.max(0,watts)/total:0;
+          const length=fraction*circumference;
+          const offset=-cursor*circumference;
+          cursor+=fraction;
+          if(length<=0.1)return '';
+          return \`<circle cx="60" cy="60" r="\${radius}" fill="none" stroke="\${colors[index]}" stroke-width="9" stroke-dasharray="\${Math.max(0,length-.8)} \${circumference}" stroke-dashoffset="\${offset}" transform="rotate(-90 60 60)" class="pm-ring-glow"/>\`;
+        }).join('');
+      };
+      const legend=(label,watts,color)=>\`<div class="pm-ring-legend"><span><i style="background:\${color}"></i>\${esc(label)}</span><strong>\${fmtW(watts)} <small>\${percent(watts)}</small></strong></div>\`;
+      return \`<div class="pm-ring-wrap"><div class="pm-ring-graphic"><svg viewBox="0 0 120 120" role="img" aria-label="Household load phase and mapping distribution">
+          <circle cx="60" cy="60" r="46" fill="none" stroke="currentColor" stroke-opacity=".10" stroke-width="9"/>
+          <circle cx="60" cy="60" r="32" fill="none" stroke="currentColor" stroke-opacity=".10" stroke-width="9"/>
+          \${measured?arcs(phases,['#3b82f6','#f59e0b','#a78bfa'],46):''}
+          \${measured?arcs([mapped,unknown,notYet],['#34d399','#fb7185','#94a3b8'],32):''}
+          </svg><div class="pm-ring-center"><strong>\${measured?fmtW(total):'—'}</strong><span>Household total</span></div></div>
+          <div class="pm-ring-legends"><div class="pm-ring-label">Phase distribution</div>
+          \${PHASES.map((p,i)=>legend(p,phases[i],['#3b82f6','#f59e0b','#a78bfa'][i])).join('')}
+          <div class="pm-ring-label">Device coverage</div>
+          \${legend('Mapped',mapped,'#34d399')}
+          \${legend('Unknown',unknown,'#fb7185')}
+          \${legend('Not yet mapped',notYet,'#94a3b8')}</div></div>\`;
+    }
+    _compactCard(d){
+      const breakdown=d.power_breakdown||{};
+      const included=(d.devices||[]).filter(r=>!r.excluded);
+      const devices=phase=>included.filter(r=>r.phase===phase);
+      const source=d.settings?.battery_sources||{};
+      const phaseTile=p=>{
+        const v=breakdown[p]||{};
+        const h=d.grid_headroom?.[p];
+        const count=devices(p).length+(this._draft?.manual_devices||[]).filter(r=>r.phase===p).length;
+        const soc=this._batterySoc(p);
+        const current=h?Math.abs(Number(h.current)).toFixed(2)+' / '+Number(h.limit).toFixed(1)+' A':'Unavailable';
+        const used=h?Math.min(100,Math.max(0,Number(h.utilization)||0)):0;
+        const assigned=devices(p).reduce((sum,r)=>sum+Math.max(0,Number(r.power_w)||0),0)
+           +devices('3-phase').reduce((sum,r)=>sum+Math.max(0,Number(r.power_w)||0),0)/3;
+        const unknown=v.cleaned==null?null:Math.max(0,Number(v.cleaned)-assigned);
+        return \`<section class="pm-compact-phase pm-\${p.toLowerCase()}"><header><b>\${p}</b><small>\${count} mapped</small></header>
+          <div class="pm-compact-line"><span>P1 grid power</span><strong>\${fmtW(v.grid)}</strong></div>
+          <div class="pm-compact-line"><span>Battery \${soc?'· SoC '+esc(soc):''}</span><strong>\${fmtW(v.battery)}</strong></div>
+          <div class="pm-compact-line"><span>Solar generation</span><strong>\${fmtW(v.solar)}</strong></div>
+          <div class="pm-compact-line pm-compact-sum"><span>Sum of loads</span><strong>\${fmtW(v.cleaned)}</strong></div>
+          <div class="pm-compact-headroom"><span>Grid current · \${current}</span><div class="pm-compact-track"><i style="width:\${used}%"></i></div></div>
+          <div class="pm-compact-line"><span>Unknown devices</span><strong>\${fmtW(unknown)}</strong></div>
+          <details class="pm-compact-devices"><summary>Mapped devices · \${count}</summary>
+          \${devices(p).map(r=>\`<div class="pm-compact-line"><span>\${esc(r.name)}</span><strong>\${fmtW(r.power_w)}</strong></div>\`).join('')||'<span class="hint">No mapped devices</span>'}</details>
+          </section>\`;
+      };
+      return \`<div class="pm-compact-wrap"><header class="pm-compact-heading"><b>Automatic Phase Mapper</b><span>\${d.settings.learning_enabled?'● Learning':'Paused'} · v\${VERSION}</span></header>
+        <div class="pm-compact-grid">\${PHASES.map(phaseTile).join('')}
+        <section class="pm-compact-phase pm-total"><header><b>Household total</b><small>L1 + L2 + L3</small></header>\${this._householdRing(d)}</section></div>
+        <div class="pm-compact-footer"><a href="/ha-auto-device-phase-mapping">Open full dashboard</a></div></div>\`;
     }
     _mapping(d){
       const rows=(d.devices||[]).filter(r=>(this._showExcluded||!r.excluded)&&`${r.name} ${this._draft?.display_names?.[r.entity_id]||''} ${r.entity_id} ${r.phase}`.toLowerCase().includes(this._filter.toLowerCase()));
