@@ -1,5 +1,14 @@
 # Automatic Phase Mapper
 
+## v1.6.3 — Compact Lovelace overview and household load rings
+
+The Lovelace card now offers a **Compact** four-tile phase overview and the previous **Detailed** device list, selectable in the Home Assistant card editor (or `view: compact` / `view: detailed` in YAML). The main Mapping dashboard retains its original four-column layout and adds a subtle-glow, dual-ring load breakdown in Household total: outer ring L1/L2/L3 power shares, inner ring mapped, unknown and not-yet-mapped consumption. All values are live estimates from existing sensor readings.
+
+Optional **battery SoC (%) sensors** can now be attached to individual battery power sources under Settings → Battery compensation. Multiple batteries per phase show their individual available percentages; SoC is display-only, never used for compensation or learning. Homes without configured batteries or solar have those lines hidden automatically in the power overview. This does not change P1 requirements.
+
+The learning algorithm is unchanged. Back up Home Assistant before installing and restart HA to load the updated integration. Confirm backend and frontend v1.6.3 before reviewing the card.
+
+
 **Find out which electrical phase your Home Assistant devices are connected to — without manually tracing every circuit.**
 
 Automatic Phase Mapper is an experimental, local Home Assistant integration that correlates individual device power changes with your three-phase grid measurements. Over time, it builds evidence for L1, L2 or L3 and presents the results in a dedicated dashboard.
