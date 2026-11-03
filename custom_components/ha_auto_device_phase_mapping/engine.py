@@ -1631,7 +1631,10 @@ class PhaseEngine:
         result = []
         for item in items if isinstance(items, list) else []:
             if isinstance(item, dict) and isinstance(item.get("entity_id"), str) and item["entity_id"]:
-                result.append({"entity_id": item["entity_id"], "positive": bool(item.get("positive", default_positive))})
+                result.append({"entity_id": item["entity_id"],
+                               "positive": bool(item.get("positive", default_positive)),
+                               **({"soc_entity_id": str(item.get("soc_entity_id") or "")}
+                                  if "soc_entity_id" in item else {})})
         return result
 
     @staticmethod
@@ -2076,6 +2079,20 @@ class PhaseEngine:
                 if type(value) not in (int, float) or not math.isfinite(value) or not 1 <= value <= 125:
                     raise ValueError("Phase current limits must be between 1 and 125 A")
             new_settings["phase_current_limits_a"] = {p: float(limits[p]) for p in PHASES}
+        # Optional battery SoC selections are display-only. They must never
+        # reset corrected history or phase-learning observations.
+        if "battery_sources" in payload:
+            groups = payload["battery_sources"]
+            if isinstance(groups, dict):
+                for sources in groups.values():
+                    if isinstance(sources, list):
+                        for item in sources:
+                            if not isinstance(item, dict):
+                                continue
+                            soc = item.get("soc_entity_id", "")
+                            if (not isinstance(soc, str) or len(soc) > 255
+                                    or (soc and not soc.startswith("sensor."))):
+                                raise ValueError("Battery SoC must be a sensor entity or blank")
         if "battery_sources" in payload or "solar_sources" in payload:
             all_new = {}
             for key, groups in (("battery_sources", PHASES), ("solar_sources", (*PHASES, "TOTAL"))):
@@ -2098,7 +2115,14 @@ class PhaseEngine:
                             raise ValueError(f"Duplicate compensation source: {item['entity_id']}")
                         all_new[item["entity_id"]] = key
                 new_settings[key] = normalized
-                if normalized != self.settings[key]:
+                if key == "battery_sources":
+                    without_soc = lambda groups: {
+                        p: [(x["entity_id"], x["positive"]) for x in items]
+                        for p, items in groups.items()
+                    }
+                    if without_soc(normalized) != without_soc(self.settings[key]):
+                        reset = True
+                elif normalized != self.settings[key]:
                     reset = True
             # Legacy fields must not accidentally re-add sources after an upgrade.
             new_settings["battery_sensors"] = {p: "" for p in PHASES}
@@ -2224,9 +2248,16 @@ class PhaseEngine:
             new_settings[key] != self.settings[key] for key in (
                 "phase_sensors", "battery_sensors", "solar_sensor",
                 "battery_discharge_positive", "solar_production_positive",
-                "battery_sources", "solar_sources", "solar_phase_estimation"
+                "solar_sources", "solar_phase_estimation"
             )
         )
+        # The only battery change relevant to phase math is its power source/sign.
+        battery_power_signature = lambda settings: {
+            p: [(x["entity_id"], x["positive"]) for x in settings["battery_sources"][p]]
+            for p in PHASES
+        }
+        if battery_power_signature(new_settings) != battery_power_signature(self.settings):
+            measurement_changed = True
         self.settings = new_settings
         if reset_device is not None:
             # Remove only this entity's old phase evidence. Preserve every
