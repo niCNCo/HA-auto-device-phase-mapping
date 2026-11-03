@@ -779,23 +779,62 @@ this._loading=false;this._busy=false;this._error='';this._message='';this._lastF
       if(!this._versionDialog)return '';
       return `<div class="editor-backdrop"><div class="editor-dialog" role="dialog" aria-modal="true"><h3>Open GitHub repository?</h3><p>Open the Automatic Phase Mapper repository in a new browser tab?</p><p class="hint">${esc(REPOSITORY)}</p><div class="actions"><button class="btn" id="cancelVersionLink">Cancel</button><a class="btn included" href="${esc(REPOSITORY)}" target="_blank" rel="noopener noreferrer" id="openVersionLink">Open repository</a></div></div></div>`;
     }
-    async _checkLatestRelease(){
-      if(this._releaseLoading || Date.now()-this._lastReleaseCheck<6*60*60*1000)return;
-      this._releaseLoading=true;this._lastReleaseCheck=Date.now();
+    _updateVersionIndicator(){
+      const status=this._releaseStatus?.status||'unverified';
+      for(const id of ['topVersionLink','versionLink']){
+        const el=this.shadowRoot?.querySelector('#'+id);
+        if(!el)continue;
+        if(el.classList){
+          el.classList.remove('version-current','version-outdated','version-unverified');
+          el.classList.add('version-'+status);
+        }
+        el.title=this._releaseStatus?.note||'Release status not checked';
+      }
+    }
+    async _checkLatestRelease(force=false){
+      // /releases/latest excludes pre-releases. The published releases list
+      // includes betas, while drafts must be ignored.
+      if(this._releaseLoading||(!force&&Date.now()-this._lastReleaseCheck<3*60*60*1000))return;
+      this._releaseLoading=true;
+      this._lastReleaseCheck=Date.now();
       try{
-        const response=await fetch('https://api.github.com/repos/niCNCo/HA-auto-device-phase-mapping/releases/latest',{headers:{Accept:'application/vnd.github+json'}});
-        if(!response.ok)throw new Error(`GitHub API: ${response.status}`);
-        const release=await response.json();
-        const version=String(release.tag_name||'').replace(/^v/i,'');
-        if(!/^\d+\.\d+\.\d+(?:[-+][a-z0-9.-]+)?$/i.test(version))throw new Error('No recognized version tag');
-        const parts=v=>v.split(/[.-]/).slice(0,3).map(x=>Number(x)||0);
-        const a=parts(version),b=parts(VERSION);
-        const newer=a[0]>b[0] || a[0]===b[0]&&a[1]>b[1] || a[0]===b[0]&&a[1]===b[1]&&a[2]>b[2];
-        this._releaseStatus={latest:version,status:newer?'outdated':'current',note:newer?'Newer GitHub release available':'Latest published release is not newer'};
-      }catch(_error){
-        // Private repos and repos without published releases cannot be checked anonymously.
-        this._releaseStatus={latest:null,status:'unverified',note:'Cannot verify latest release (private repository, no release, or GitHub unavailable)'};
-      }finally{this._releaseLoading=false;if(this._tab==='info'&&!this._editor)this._render();}
+        const response=await fetch('https://api.github.com/repos/niCNCo/HA-auto-device-phase-mapping/releases?per_page=50',
+          {headers:{Accept:'application/vnd.github+json'}});
+        if(!response.ok)throw new Error('GitHub API: '+response.status);
+        const releases=await response.json();
+        if(!Array.isArray(releases))throw new Error('Invalid GitHub releases response');
+        const parse=tag=>{
+          const match=/^v?(\d+)\.(\d+)\.(\d+)(?:[-+][a-z0-9.-]+)?$/i.exec(String(tag||''));
+          return match?[Number(match[1]),Number(match[2]),Number(match[3])]:null;
+        };
+        const compare=(a,b)=>{
+          for(let i=0;i<3;i++)if(a[i]!==b[i])return a[i]-b[i];
+          return 0;
+        };
+        const available=releases.filter(release=>release&&!release.draft&&parse(release.tag_name))
+          .map(release=>({release,parts:parse(release.tag_name)}))
+          .sort((a,b)=>compare(b.parts,a.parts));
+        if(!available.length)throw new Error('No published version tags');
+        const latest=available[0],local=parse(VERSION);
+        if(!local)throw new Error('Invalid installed version');
+        const newer=compare(latest.parts,local)>0;
+        const version=String(latest.release.tag_name).replace(/^v/i,'');
+        this._releaseStatus={
+          latest:version,status:newer?'outdated':'current',
+          note:newer?'Newer GitHub release available'+(latest.release.prerelease?' (pre-release)':''):'No newer published release',
+          prerelease:!!latest.release.prerelease,
+          url:typeof latest.release.html_url==='string'&&latest.release.html_url.startsWith(REPOSITORY+'/releases/')?latest.release.html_url:REPOSITORY
+        };
+      }catch(error){
+        // Network, GitHub rate limits, and private repositories are unverified;
+        // never mark an unverified check as up-to-date.
+        this._releaseStatus={latest:null,status:'unverified',
+          note:'Release check unavailable ('+String(error?.message||error)+')'};
+      }finally{
+        this._releaseLoading=false;
+        if(this._tab==='info'&&!this._editor)this._render();
+        else this._updateVersionIndicator();
+      }
     }
     _learningDiagnostics(d){
       const stats=d.learning_diagnostics||{},count=stats.counts||{},history=stats.history||{};
