@@ -50,6 +50,7 @@ for(const type of ['phase-mapper-card','phase-mapper-panel']){
  e._data.settings.battery_sources.L1=[{entity_id:'sensor.battery_power',positive:true,soc_entity_id:'sensor.battery_soc'}];
  e._data.settings.solar_sources.L2=[{entity_id:'sensor.solar_power',positive:true}];
  e._hass.states['sensor.battery_soc']={state:'74',attributes:{device_class:'battery',unit_of_measurement:'%'}};
+ if(type==='phase-mapper-card')e.setConfig({view:'compact'});
  e._tab='mapping';e._render();
  assert(e.shadowRoot.innerHTML.includes('Battery'));
  assert(e.shadowRoot.innerHTML.includes('74%'));
