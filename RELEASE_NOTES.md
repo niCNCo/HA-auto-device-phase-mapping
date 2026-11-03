@@ -1,3 +1,12 @@
+# v1.6.5 — Household ring layout refinement
+
+- Enlarged the household two-ring chart in the main dashboard and compact Lovelace card.
+- Moved phase and device-coverage legends into two legible, responsive groups beneath the graph, rather than shrinking the chart to fit alongside them.
+- Matched the subtle segment glow to each corresponding phase or coverage color.
+- Kept the original four-column dashboard, measurement calculations, battery/solar configuration, and phase-learning engine unchanged.
+
+---
+
 # v1.6.4 — Release update indicator
 
 - Automatically check published GitHub releases, including pre-releases, when the Phase Mapper frontend opens and every three hours while it stays open.
