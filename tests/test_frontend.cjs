@@ -39,7 +39,21 @@ for(const type of ['phase-mapper-card','phase-mapper-panel']){
  assert(e.shadowRoot.innerHTML.includes('Add battery'));
  assert(e.shadowRoot.innerHTML.includes('Add solar')); 
  assert(e.shadowRoot.innerHTML.includes('Battery compensation'));  
- if(type==='phase-mapper-panel'){ e._tab='mapping';e._render();assert(e.shadowRoot.innerHTML.includes('Household total')); }
+ if(type==='phase-mapper-panel'){
+   e._tab='mapping';e._render();
+   assert(e.shadowRoot.innerHTML.includes('Household total'));
+   assert(e.shadowRoot.innerHTML.includes('pm-ring-graphic'));
+   assert(!e.shadowRoot.innerHTML.includes('Battery idle'));
+   assert(!e.shadowRoot.innerHTML.includes('Solar generation'));
+ }
+ // A connected battery shows its own SoC; solar is independent and optional.
+ e._data.settings.battery_sources.L1=[{entity_id:'sensor.battery_power',positive:true,soc_entity_id:'sensor.battery_soc'}];
+ e._data.settings.solar_sources.L2=[{entity_id:'sensor.solar_power',positive:true}];
+ e._hass.states['sensor.battery_soc']={state:'74',attributes:{device_class:'battery',unit_of_measurement:'%'}};
+ e._tab='mapping';e._render();
+ assert(e.shadowRoot.innerHTML.includes('Battery'));
+ assert(e.shadowRoot.innerHTML.includes('74%'));
+ assert(e.shadowRoot.innerHTML.includes('Solar generation'));
  
 }
 console.log('Frontend registration, card, full panel, and settings smoke tests passed');
