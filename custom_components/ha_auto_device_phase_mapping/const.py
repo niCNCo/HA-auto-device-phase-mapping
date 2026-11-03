@@ -3,7 +3,7 @@
 from copy import deepcopy
 
 DOMAIN = "ha_auto_device_phase_mapping"
-VERSION = "1.6.3"
+VERSION = "1.6.4"
 PLATFORMS = ["sensor"]
 PHASES = ("L1", "L2", "L3")
 FRONTEND_PATH = "/ha_auto_device_phase_mapping_static/phase-mapper.js"

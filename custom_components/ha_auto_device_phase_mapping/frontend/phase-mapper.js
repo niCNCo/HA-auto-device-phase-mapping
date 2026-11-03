@@ -1,7 +1,7 @@
 /* HA_auto_device_phase_mapping v1.6.2 — shared Home Assistant panel and dashboard card. */
 (() => {
   'use strict';
-  const VERSION = '1.6.3';
+  const VERSION = '1.6.4';
   const PHASES = ['L1', 'L2', 'L3'];
   const esc = value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
   const fmtW = value => value == null || !Number.isFinite(Number(value)) ? '—' : `${Math.round(Number(value)).toLocaleString()} W`;
@@ -257,6 +257,7 @@
     .native-icon-field:not(:defined){display:none}
     .native-icon-field:defined + .icon-choice-container{display:none}
     .version-link{background:transparent;border:0;color:var(--primary-color);padding:0;text-decoration:underline;font-weight:700;cursor:pointer}
+    .version-link.version-current{color:#22c55e}.version-link.version-outdated{color:#ef4444}.version-link.version-unverified{color:var(--secondary-text-color)}
     .version-status{font-size:12px}.version-status.current{color:#22c55e}.version-status.outdated{color:#ef4444}.version-status.unverified{color:var(--secondary-text-color)}
     @media(max-width:390px){.navmenu{font-size:16px;min-width:15px}.page{padding:0}.surface{padding:9px}.topnav{gap:2px;padding:0 4px;min-height:43px}.topbrand .mini-logo{width:21px;height:21px}.navtab{font-size:9.5px;padding:9px 3px}.topstat{min-width:35px;width:35px;padding:4px 0}.topstat strong{font-size:13px}.topstat span{font-size:7.5px}.topstats{gap:2px}.sensor-actions select{width:79px}.sensor-actions button{min-width:54px;font-size:10px;padding:6px}}
 
@@ -458,7 +459,7 @@
       // One shared toggle ensures the same summary alignment in all four power tiles.
       this._phaseMappedExpanded=true;
       try{const preference=window.localStorage?.getItem('ha_auto_device_phase_mapping.mappedExpanded');if(preference!==null&&preference!==undefined)this._phaseMappedExpanded=preference==='true';}catch(_err){}
-      this._editor=null;this._versionDialog=false;this._releaseStatus=null;this._lastReleaseCheck=0;this._releaseLoading=false;
+      this._editor=null;this._versionDialog=false;this._releaseStatus=null;this._lastReleaseCheck=0;this._releaseLoading=false;this._releaseTimer=null;
 this._loading=false;this._busy=false;this._error='';this._message='';this._lastFetch=0;
       this._pmSkipWire=false;this._pmLastInteraction=0;this._pmTrackingInstalled=false;this._pmPendingStructure=false;
       this._refreshTimer=null;this._autoTimer=null;this._saveMismatch=[];this._draftRevision=0;this._serverRevision=0;this._confirmReset=false;this._resetAcknowledged=false;this._resetDeviceTarget=null;this._saveState='saved';
@@ -473,8 +474,8 @@ this._loading=false;this._busy=false;this._error='';this._message='';this._lastF
     }
     getCardSize(){return this._config?.view==='detailed'?7:5;}
     static getStubConfig(){return {view:'compact'};}
-    connectedCallback(){this._pmTrackInteraction();this._render();this._startRefresh();if(this._hass)this._fetch();}
-    disconnectedCallback(){if(this._refreshTimer!==null){clearInterval(this._refreshTimer);this._refreshTimer=null;}if(this._dirty&&!this._busy)void this._autosave();}
+    connectedCallback(){this._pmTrackInteraction();this._render();this._startRefresh();void this._checkLatestRelease();if(this._releaseTimer===null)this._releaseTimer=setInterval(()=>{if(this.isConnected)void this._checkLatestRelease();},3*60*60*1000);if(this._hass)this._fetch();}
+    disconnectedCallback(){if(this._refreshTimer!==null){clearInterval(this._refreshTimer);this._refreshTimer=null;}if(this._releaseTimer!==null){clearInterval(this._releaseTimer);this._releaseTimer=null;}if(this._dirty&&!this._busy)void this._autosave();}
     _refreshMs(){return 1000*(Number(this._draft?.dashboard_refresh_seconds ?? this._data?.settings?.dashboard_refresh_seconds)||2);}
     _startRefresh(){
       if(this._refreshTimer!==null)clearInterval(this._refreshTimer);
@@ -706,7 +707,7 @@ this._loading=false;this._busy=false;this._error='';this._message='';this._lastF
       const header=`<nav class="topnav" aria-label="Phase Mapper navigation"><${this.full?'button':'div'} class="topbrand" ${this.full?'id="menu" aria-label="Open Home Assistant sidebar"':''} title="Automatic Phase Mapper · Passive Load Discovery · v${esc(d.version)}">
         <img class="wide-logo" src="/ha_auto_device_phase_mapping_static/brand/${logoTheme}logo@2x.png?v=${VERSION}" alt="Automatic Phase Mapper" />
         <img class="mini-logo" src="/ha_auto_device_phase_mapping_static/brand/${logoTheme}icon.png?v=${VERSION}" alt="Phase Mapper" /></${this.full?'button':'div'}>
-        <div class="navtabs">${tabs}</div><span class="topstatus"><span class="statusdot" style="${d.settings.learning_enabled?'':'background:#f59e0b'}"></span>${d.settings.learning_enabled?'Learning':'Paused'} · <button class="version-link" id="topVersionLink" title="Open GitHub repository">v${VERSION}</button></span><div class="topstats">${statCard(rows.length,'Detected','#94a3b8')}${statCard(mapped.length,'Mapped','#22c55e')}${statCard(rows.filter(r=>r.excluded).length,'Excluded','#94a3b8')}</div></nav>`;
+        <div class="navtabs">${tabs}</div><span class="topstatus"><span class="statusdot" style="${d.settings.learning_enabled?'':'background:#f59e0b'}"></span>${d.settings.learning_enabled?'Learning':'Paused'} · <button class="version-link version-${this._releaseStatus?.status||'unverified'}" id="topVersionLink" title="${esc(this._releaseStatus?.note||'Release not checked')}">v${VERSION}</button></span><div class="topstats">${statCard(rows.length,'Detected','#94a3b8')}${statCard(mapped.length,'Mapped','#22c55e')}${statCard(rows.filter(r=>r.excluded).length,'Excluded','#94a3b8')}</div></nav>`;
       return header+(this._tab==='mapping'?phaseGrid+`${this.full&&d.settings.solar_phase_estimation?.enabled?`<p class="hint">SolarEdge phase allocation: ${d.solar_estimation_status==='estimated'?'estimated from inverter V × I proportions, normalized to total AC power':d.solar_estimation_status==='fallback_equal'?'SolarEdge phase measurements unavailable; equal split shown as an estimate, learning paused':d.solar_estimation_status==='zero_generation'?'solar production near zero':d.solar_estimation_status==='solar_source_unavailable'?'solar source unavailable — learning paused':'using equal third allocation'}. Phase allocations assume similar power factors.</p>`:''}`:'');
     }
     _batterySystemRows(phase){
@@ -776,25 +777,64 @@ this._loading=false;this._busy=false;this._error='';this._message='';this._lastF
     }
     _versionDialogHtml(){
       if(!this._versionDialog)return '';
-      return `<div class="editor-backdrop"><div class="editor-dialog" role="dialog" aria-modal="true"><h3>Open GitHub repository?</h3><p>Open the Automatic Phase Mapper repository in a new browser tab?</p><p class="hint">${esc(REPOSITORY)}</p><div class="actions"><button class="btn" id="cancelVersionLink">Cancel</button><a class="btn included" href="${esc(REPOSITORY)}" target="_blank" rel="noopener noreferrer" id="openVersionLink">Open repository</a></div></div></div>`;
+      return `<div class="editor-backdrop"><div class="editor-dialog" role="dialog" aria-modal="true"><h3>Open GitHub repository?</h3><p>${this._releaseStatus?.status==='outdated'?'Open the newer version v'+esc(this._releaseStatus.latest)+' release page?':'Open the Automatic Phase Mapper repository in a new browser tab?'}</p><p class="hint">${esc(this._releaseStatus?.status==='outdated'?this._releaseStatus.url:REPOSITORY)}</p><div class="actions"><button class="btn" id="cancelVersionLink">Cancel</button><a class="btn included" href="${esc(this._releaseStatus?.status==='outdated'?this._releaseStatus.url:REPOSITORY)}" target="_blank" rel="noopener noreferrer" id="openVersionLink">Open repository</a></div></div></div>`;
     }
-    async _checkLatestRelease(){
-      if(this._releaseLoading || Date.now()-this._lastReleaseCheck<6*60*60*1000)return;
-      this._releaseLoading=true;this._lastReleaseCheck=Date.now();
+    _updateVersionIndicator(){
+      const status=this._releaseStatus?.status||'unverified';
+      for(const id of ['topVersionLink','versionLink']){
+        const el=this.shadowRoot?.querySelector('#'+id);
+        if(!el)continue;
+        if(el.classList){
+          el.classList.remove('version-current','version-outdated','version-unverified');
+          el.classList.add('version-'+status);
+        }
+        el.title=this._releaseStatus?.note||'Release status not checked';
+      }
+    }
+    async _checkLatestRelease(force=false){
+      // /releases/latest excludes pre-releases. The published releases list
+      // includes betas, while drafts must be ignored.
+      if(this._releaseLoading||(!force&&Date.now()-this._lastReleaseCheck<3*60*60*1000))return;
+      this._releaseLoading=true;
+      this._lastReleaseCheck=Date.now();
       try{
-        const response=await fetch('https://api.github.com/repos/niCNCo/HA-auto-device-phase-mapping/releases/latest',{headers:{Accept:'application/vnd.github+json'}});
-        if(!response.ok)throw new Error(`GitHub API: ${response.status}`);
-        const release=await response.json();
-        const version=String(release.tag_name||'').replace(/^v/i,'');
-        if(!/^\d+\.\d+\.\d+(?:[-+][a-z0-9.-]+)?$/i.test(version))throw new Error('No recognized version tag');
-        const parts=v=>v.split(/[.-]/).slice(0,3).map(x=>Number(x)||0);
-        const a=parts(version),b=parts(VERSION);
-        const newer=a[0]>b[0] || a[0]===b[0]&&a[1]>b[1] || a[0]===b[0]&&a[1]===b[1]&&a[2]>b[2];
-        this._releaseStatus={latest:version,status:newer?'outdated':'current',note:newer?'Newer GitHub release available':'Latest published release is not newer'};
-      }catch(_error){
-        // Private repos and repos without published releases cannot be checked anonymously.
-        this._releaseStatus={latest:null,status:'unverified',note:'Cannot verify latest release (private repository, no release, or GitHub unavailable)'};
-      }finally{this._releaseLoading=false;if(this._tab==='info'&&!this._editor)this._render();}
+        const response=await fetch('https://api.github.com/repos/niCNCo/HA-auto-device-phase-mapping/releases?per_page=50',
+          {headers:{Accept:'application/vnd.github+json'}});
+        if(!response.ok)throw new Error('GitHub API: '+response.status);
+        const releases=await response.json();
+        if(!Array.isArray(releases))throw new Error('Invalid GitHub releases response');
+        const parse=tag=>{
+          const match=/^v?(\d+)\.(\d+)\.(\d+)(?:[-+][a-z0-9.-]+)?$/i.exec(String(tag||''));
+          return match?[Number(match[1]),Number(match[2]),Number(match[3])]:null;
+        };
+        const compare=(a,b)=>{
+          for(let i=0;i<3;i++)if(a[i]!==b[i])return a[i]-b[i];
+          return 0;
+        };
+        const available=releases.filter(release=>release&&!release.draft&&parse(release.tag_name))
+          .map(release=>({release,parts:parse(release.tag_name)}))
+          .sort((a,b)=>compare(b.parts,a.parts));
+        if(!available.length)throw new Error('No published version tags');
+        const latest=available[0],local=parse(VERSION);
+        if(!local)throw new Error('Invalid installed version');
+        const newer=compare(latest.parts,local)>0;
+        const version=String(latest.release.tag_name).replace(/^v/i,'');
+        this._releaseStatus={
+          latest:version,status:newer?'outdated':'current',
+          note:newer?'Newer GitHub release available'+(latest.release.prerelease?' (pre-release)':''):'No newer published release',
+          prerelease:!!latest.release.prerelease,
+          url:typeof latest.release.html_url==='string'&&latest.release.html_url.startsWith(REPOSITORY+'/releases/')?latest.release.html_url:REPOSITORY
+        };
+      }catch(error){
+        // Network, GitHub rate limits, and private repositories are unverified;
+        // never mark an unverified check as up-to-date.
+        this._releaseStatus={latest:null,status:'unverified',
+          note:'Release check unavailable ('+String(error?.message||error)+')'};
+      }finally{
+        this._releaseLoading=false;
+        if(this._tab==='info'&&!this._editor)this._render();
+        else this._updateVersionIndicator();
+      }
     }
     _learningDiagnostics(d){
       const stats=d.learning_diagnostics||{},count=stats.counts||{},history=stats.history||{};
@@ -1019,10 +1059,10 @@ this._loading=false;this._busy=false;this._error='';this._message='';this._lastF
       if(!this._releaseStatus&&!this._releaseLoading)void this._checkLatestRelease();
       const status=this._releaseStatus||{status:'unverified',note:'Checking for published GitHub releases…',latest:null};
       return `<div class="info-grid">
-      <section class="info-section wide"><h3>Version and repository</h3><p><strong>Installed:</strong> <button class="version-link" id="versionLink" title="Open repository with confirmation">v${VERSION}</button> · <strong>Latest published:</strong> ${status.latest?'v'+esc(status.latest):'Not verified'}</p>
-      <p><span class="version-status ${esc(status.status)}">${esc(status.note)}</span></p>
+      <section class="info-section wide"><h3>Version and repository</h3><p><strong>Installed:</strong> <button class="version-link version-${status.status}" id="versionLink" title="${esc(status.note)}">v${VERSION}</button> · <strong>Latest published:</strong> ${status.latest?'v'+esc(status.latest)+(status.prerelease?' (pre-release)':''):'Not verified'}</p>
+      <p><span class="version-status ${esc(status.status)}">${esc(status.note)}</span> <button class="btn compactbtn" id="checkReleaseNow" ${this._releaseLoading?'disabled':''}>${this._releaseLoading?'Checking…':'Check now'}</button></p>
       <p><strong>GitHub repository:</strong> <button class="version-link" id="repositoryLink">${esc(REPOSITORY)}</button></p>
-      <p class="hint">Version comparison uses the latest published GitHub release, not the newest commit. Private repositories and repositories without releases cannot be verified anonymously. Unknown is not treated as up-to-date.</p></section>
+      <p class="hint">Version comparison checks published GitHub releases, including pre-releases, on dashboard load and every three hours while open. Use Check now to refresh. It does not compare unpublished commits. Private repositories and repositories without releases cannot be verified anonymously. Unknown is not treated as up-to-date.</p></section>
       <section class="info-section wide"><h3>Welcome to Automatic Phase Mapper</h3><p>Passive monitoring only: the integration watches changes in Home Assistant device power sensors and compares them with corrected L1, L2 and L3 power changes. It does not switch or control equipment. Phase identification is an estimate, not suitable for electrical safety decisions.</p></section>
       <section class="info-section"><h3>1 · Initial setup</h3><ol><li>In <strong>Settings</strong>, choose the three individual P1 grid power sensors, measured in signed watts.</li><li>Optionally add battery and solar AC power sensors on their physical phases, with the correct sign for each sensor.</li><li>Enable learning and set the minimum device power change (50 W is the default starting point).</li><li>The Settings selectors show live signed values, units and last-update age under each selected entity. Click a reading for More info. Adjust dashboard refresh speed (1–30 seconds) in Settings. Your changes are saved automatically. The mapper starts collecting evidence as devices change their consumption.</li></ol></section>
       <section class="info-section"><h3>2 · Map devices</h3><p>In <strong>Mapping</strong>, devices begin under <strong>Still learning</strong>. Multiple clean power transitions build evidence for an automatic assignment. Slowly polled sensors can show <strong>Likely L1/L2/L3</strong> based on repeated preliminary clues without being automatically assigned. Learning combines clean ON/OFF events with averaged power-pattern changes, allowing delayed reporting and a 50 W default change threshold. Confidence converges more quickly when repeated changes clearly favor one phase; mapped device names show a red, orange, or green evidence dot. These indicate relative strength of evidence, not a calibrated probability.</p><p><strong>Drag and drop</strong> a device from Still learning into L1, L2, L3, or the 3-phase group to assign it manually. You can also use each device’s assignment dropdown, including on mobile. Choose <strong>Automatic</strong> to remove an override and resume learning.</p><p>Use <strong>Add appliance without a Home Assistant power sensor</strong> to register unmetered devices such as a coffee maker. Any power sensor (including Still learning) can have its display name and MDI icon customized with the pencil button without renaming its Home Assistant entity; clicking the device name still opens More info.</p><p>Mouse users can drag devices between phase lists. On touchscreens use the phase dropdown. Expand Still learning for the entire unmapped list, with no internal scroll bar. Its open/closed state is remembered when you navigate away and return in the same browser. Expand Mapped devices to see full learning evidence for mapped sensors.</p><p>Click a device row or power value to open Home Assistant's native More info dialog.</p></section>
@@ -1559,6 +1599,7 @@ this._loading=false;this._busy=false;this._error='';this._message='';this._lastF
         }
         this._editor=null;this._message='Device appearance updated. Saving…';this._markDirty();this._render();
       });
+      bind('#checkReleaseNow','click',()=>{void this._checkLatestRelease(true);});
       bind('#versionLink','click',()=>{this._versionDialog=true;this._render();});
       bind('#topVersionLink','click',()=>{this._versionDialog=true;this._render();});
       bind('#repositoryLink','click',()=>{this._versionDialog=true;this._render();});
