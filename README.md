@@ -14,8 +14,6 @@ This release candidate includes the updated four-column Lovelace card (L1 : L2 :
 
 Automatic Phase Mapper is an experimental, local Home Assistant integration that correlates individual device power changes with your three-phase grid measurements. Over time, it builds evidence for L1, L2 or L3 and presents the results in a dedicated dashboard.
 
-![Automatic Phase Mapper v1.6.3 RC1 — live Mapping cockpit](docs/images/mapping-overview.png)
-
 **Candidate version:** `v1.6.3-rc1` (integration identifies as `1.6.3`) · **Status:** Experimental / candidate validation · **Designed for:** Three-phase Home Assistant installations
 
 [Get started](#installation) · [Explore the dashboard](#a-dashboard-built-around-your-phases) · [Learn faster](docs/TROUBLESHOOTING.md#help-a-low-power-or-slow-device-learn-faster) · [Troubleshooting](docs/TROUBLESHOOTING.md) · [Release notes](RELEASE_NOTES.md) · [Report an issue](https://github.com/niCNCo/HA-auto-device-phase-mapping/issues)
@@ -48,7 +46,7 @@ The compact Lovelace overview gives each of L1, L2 and L3 one share of the row a
 
 See L1, L2 and L3 side by side, with live P1 data, mapped device power, remaining unknown consumption and total household load. Expand each phase to see the appliances associated with it.
 
-![Real mapping overview: L1, L2, L3 and household total](docs/images/mapping-overview.png)
+The current Mapping cockpit is shown in the screenshot at the top of this README.
 
 ### 2. Devices — mapped and still learning
 
