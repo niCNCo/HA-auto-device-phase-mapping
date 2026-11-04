@@ -1,0 +1,13 @@
+'use strict';
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const src=fs.readFileSync('custom_components/ha_auto_device_phase_mapping/frontend/phase-mapper.js','utf8');
+const start=src.indexOf('/* v1.6.3: Phase summary bars use the entire available inner column.');
+const end=src.indexOf('/* v1.6.3 local revision: aligned household source/coverage legends. */',start);
+assert.ok(start>=0 && end>start,'responsive full-width summary CSS is installed');
+const css=src.slice(start,end);
+assert.match(css,/\.phasebox \.phase-devices \.mapped-combined \.combined-details\s*\{[^}]*grid-template-columns:minmax\(0,1fr\)/);
+assert.match(css,/\.phasebox \.phase-devices \.unknown-load \.unknown-details/);
+assert.match(css,/\.phasebox \.phase-devices \.mapped-combined \.devicebar\s*\{[^}]*width:100%/);
+assert.match(css,/\.phasebox \.phase-devices \.mapped-combined \.combined-details>span\[aria-hidden\]\{display:none\}/);
+console.log('Full-width phase summary bars CSS contracts passed');

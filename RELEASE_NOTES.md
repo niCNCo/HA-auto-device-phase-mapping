@@ -1,3 +1,18 @@
+# v1.6.3 RC1 — responsive Lovelace overview and dashboard stability
+
+**Status:** release candidate; based on the locally tested v1.6.3 integration. Not yet a final public release.
+
+- **Compact Lovelace card:** L1, L2, L3 and a wider Household total on one row using a 1:1:1:2 split where space allows. Household donut on the left; Total loads, Solar, Battery and the phase/Unknown breakdown on the right. Hide percentages at intermediate widths, then reflow cards on narrower screens.
+- **Card naming and icons:** Expanded mapped-device lists use saved device aliases and MDI icons rather than raw sensor names.
+- **Offline mapped devices:** Keep the saved phase assignment and mapped count during temporary sensor outages. Show regular-weight red **Offline** instead of a stale wattage; exclude unavailable sensors from live power totals. Restore live values on reconnect.
+- **Cockpit polish:** Align Household mapped-device summaries with phase summaries, use consistent box spacing and available bar widths, and prevent household-summary jitter during refresh. Preserve circle-graph glow.
+- **Updated real screenshots:** Compact card, mapping overview and expanded mapped-device cockpit. Existing configuration and diagnostics images stay unchanged.
+- **Preservation:** No deliberate changes to phase-learning algorithm, confidence calculations, saved mappings or `.storage` schema. Back up Home Assistant before upgrading.
+
+**Local automated checks:** 162 Python tests pass (2 collection warnings). Some legacy JavaScript tests and two v1.6.3 frontend assertions still fail and must be reconciled before final promotion. Actual Home Assistant desktop/iOS verification remains an installation-level check.
+
+---
+
 # v1.6.2 — iOS dashboard flicker and scroll stability
 
 - Fix the Home Assistant iOS Companion app repeatedly jumping or flickering while scrolling: automatic refreshes now update existing text, values, colors and meter bars **without replacing the entire dashboard DOM**.
@@ -292,3 +307,17 @@ Install via Samba by copying `custom_components/ha_auto_device_phase_mapping` ov
 - Added manually entered appliances without HA entities, with optional room, phase reassignment, deletion and persistent storage.
 - Retains earlier measurements, excluded entities, manual overrides and learning scores in `.storage` on upgrade.
 - Historical learner uses a longer in-memory buffer; invalid compensation and stale P1 samples still block learning. Real-world timing varies between integrations; use the Learning diagnostics counters to verify operation.
+
+### v1.6.3 responsive compact Lovelace card refinement (unpublished)
+
+- Corrected household ring/source/coverage styles for the compact card (`pm-total`), which previously only targeted the full-dashboard `phasebox total` element.
+- Uses card-width container queries to keep L1/L2/L3 tiles and move Household total to a full-width row on constrained dashboard widths; stacks individual phase tiles on phones.
+- Gives each household reading and coverage percentage a stable responsive grid cell; prevents numeric labels from running together.
+- Keeps battery/solar source readings and the phase detection engine unchanged.
+- Confirmed in desktop Chromium at 390, 768, 1160, and 1536 px viewport widths with no document horizontal overflow. The Home Assistant iOS Companion app still requires on-device acceptance testing.
+
+### v1.6.3 development: keep offline devices mapped
+- Previously learned phase assignments remain visible if a W power sensor becomes `unavailable`, `unknown`, or its Home Assistant state temporarily disappears.
+- Its existing L1/L2/L3 assignment and mapped count are retained; the individual device power readout shows **Offline** in red, instead of 0 W or a stale wattage.
+- Offline devices contribute no watts to live power totals. A recovered sensor resumes its live reading without turning recovery into a fabricated ON/OFF learning event.
+- Adds focused Python and JavaScript regression tests. No changes to storage format or stored phase evidence.

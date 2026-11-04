@@ -1,0 +1,11 @@
+"use strict";
+const fs = require("node:fs");
+const assert = require("node:assert/strict");
+const source = fs.readFileSync("custom_components/ha_auto_device_phase_mapping/frontend/phase-mapper.js", "utf8");
+const render = source.slice(source.indexOf("    _render(){", source.indexOf("    _pmAlignHouseholdMapped(){")));
+const inject = render.indexOf("this._pmRenderTarget.innerHTML=");
+const align = render.indexOf("if(this.full&&this._tab==='mapping')this._pmAlignHouseholdMapped();");
+const scroll = render.indexOf("this.shadowRoot.querySelectorAll('.scroll').forEach");
+assert.ok(inject >= 0 && align > inject && scroll > align, "synchronous alignment must happen immediately after the new DOM is inserted, before scroll restoration and paint");
+assert.match(source, /_pmAlignHouseholdMapped\(\)\{[\s\S]*?const reference=phases\?\.querySelector\('\.phasebox\.l1 \.mapped-device-card'\)/);
+console.log("Household mapped position restored synchronously on refresh");
