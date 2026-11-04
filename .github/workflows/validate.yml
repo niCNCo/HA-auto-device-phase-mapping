@@ -18,5 +18,6 @@ jobs:
         run: |
           node --check custom_components/ha_auto_device_phase_mapping/frontend/phase-mapper.js
           node tests/test_frontend.cjs
+          node tests/test_version_check.cjs
       - name: Test pure correlation helper
         run: python -m unittest discover -s tests -v

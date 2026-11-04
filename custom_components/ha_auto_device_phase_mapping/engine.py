@@ -443,15 +443,31 @@ class PhaseEngine:
     def _refresh_candidates(self):
         source_ids = self._source_ids()
         candidates = {}
+        # A mapped power sensor must remain listed when Zigbee or another source
+        # reports unavailable/unknown. Sensor metadata usually survives those
+        # states, but also restore persisted phase assignments if the HA state
+        # entity temporarily disappears altogether.
+        remembered = {
+            entity_id for entity_id, evidence in self.results.items()
+            if isinstance(evidence, dict) and evidence.get("phase") in (*PHASES, "3-phase")
+        }
+        remembered.update(self.settings.get("manual_assignments", {}))
         for state in self.hass.states.async_all("sensor"):
-            if (valid_power(state) is None or state.entity_id in source_ids
-                    or state.entity_id.startswith(("sensor.automatic_ha_auto_device_phase_mapping_",
-                                                    "sensor.ha_auto_device_phase_mapping_"))):
+            entity_id = state.entity_id
+            if (entity_id in source_ids
+                    or entity_id.startswith(("sensor.automatic_ha_auto_device_phase_mapping_",
+                                             "sensor.ha_auto_device_phase_mapping_"))):
                 continue
-            candidates[state.entity_id] = {
-                "entity_id": state.entity_id,
-                "name": state.name,
-            }
+            if valid_power(state) is None and entity_id not in remembered:
+                continue
+            candidates[entity_id] = {"entity_id": entity_id, "name": state.name}
+        for entity_id in remembered:
+            if entity_id.startswith("sensor.") and entity_id not in source_ids and entity_id not in candidates:
+                previous = self.candidates.get(entity_id, {})
+                candidates[entity_id] = {
+                    "entity_id": entity_id,
+                    "name": previous.get("name") or entity_id.removeprefix("sensor.").replace("_", " ").title(),
+                }
         if set(self.candidates) != set(candidates):
             self._dirty = True
         self.candidates = candidates
@@ -480,6 +496,10 @@ class PhaseEngine:
         state = event.data.get("new_state")
         value = valid_power(state)
         if value is None:
+            # Never reuse an old wattage after a device goes offline, or
+            # interpret recovery as a genuine ON/OFF transition for learning.
+            if entity_id not in self._source_ids():
+                self.snapshots.pop(entity_id, None)
             return
         now = time.monotonic()
         previous = self.snapshots.get(entity_id)
@@ -1631,7 +1651,10 @@ class PhaseEngine:
         result = []
         for item in items if isinstance(items, list) else []:
             if isinstance(item, dict) and isinstance(item.get("entity_id"), str) and item["entity_id"]:
-                result.append({"entity_id": item["entity_id"], "positive": bool(item.get("positive", default_positive))})
+                result.append({"entity_id": item["entity_id"],
+                               "positive": bool(item.get("positive", default_positive)),
+                               **({"soc_entity_id": str(item.get("soc_entity_id") or "")}
+                                  if "soc_entity_id" in item else {})})
         return result
 
     @staticmethod
@@ -1943,6 +1966,9 @@ class PhaseEngine:
         for entity_id, item in self.candidates.items():
             evidence = self.results.get(entity_id, {})
             manual = self.settings["manual_assignments"].get(entity_id)
+            live_state = self.hass.states.get(entity_id)
+            current_power = valid_power(live_state)
+            offline = current_power is None
             rows.append({
                 "manual": bool(manual),
                 "entity_id": entity_id,
@@ -1955,7 +1981,8 @@ class PhaseEngine:
                 "scores": evidence.get("scores", {}),
                 "last_seen": evidence.get("last_seen"),
                 "excluded": entity_id in excluded,
-                "power_w": self.snapshots.get(entity_id, (None,))[0],
+                "power_w": None if offline else current_power,
+                "offline": offline,
                 # Existing change cadence remains available for learning diagnostics.
                 "report_interval_seconds": round(sorted(self.sensor_cadence[entity_id])[len(self.sensor_cadence[entity_id])//2]) if self.sensor_cadence.get(entity_id) else None,
                 "measured_refresh_seconds": round(sorted(self.sensor_refresh_intervals[entity_id])[len(self.sensor_refresh_intervals[entity_id])//2]) if self.sensor_refresh_intervals.get(entity_id) else None,
@@ -2076,6 +2103,20 @@ class PhaseEngine:
                 if type(value) not in (int, float) or not math.isfinite(value) or not 1 <= value <= 125:
                     raise ValueError("Phase current limits must be between 1 and 125 A")
             new_settings["phase_current_limits_a"] = {p: float(limits[p]) for p in PHASES}
+        # Optional battery SoC selections are display-only. They must never
+        # reset corrected history or phase-learning observations.
+        if "battery_sources" in payload:
+            groups = payload["battery_sources"]
+            if isinstance(groups, dict):
+                for sources in groups.values():
+                    if isinstance(sources, list):
+                        for item in sources:
+                            if not isinstance(item, dict):
+                                continue
+                            soc = item.get("soc_entity_id", "")
+                            if (not isinstance(soc, str) or len(soc) > 255
+                                    or (soc and not soc.startswith("sensor."))):
+                                raise ValueError("Battery SoC must be a sensor entity or blank")
         if "battery_sources" in payload or "solar_sources" in payload:
             all_new = {}
             for key, groups in (("battery_sources", PHASES), ("solar_sources", (*PHASES, "TOTAL"))):
@@ -2098,7 +2139,14 @@ class PhaseEngine:
                             raise ValueError(f"Duplicate compensation source: {item['entity_id']}")
                         all_new[item["entity_id"]] = key
                 new_settings[key] = normalized
-                if normalized != self.settings[key]:
+                if key == "battery_sources":
+                    without_soc = lambda groups: {
+                        p: [(x["entity_id"], x["positive"]) for x in items]
+                        for p, items in groups.items()
+                    }
+                    if without_soc(normalized) != without_soc(self.settings[key]):
+                        reset = True
+                elif normalized != self.settings[key]:
                     reset = True
             # Legacy fields must not accidentally re-add sources after an upgrade.
             new_settings["battery_sensors"] = {p: "" for p in PHASES}
@@ -2224,9 +2272,16 @@ class PhaseEngine:
             new_settings[key] != self.settings[key] for key in (
                 "phase_sensors", "battery_sensors", "solar_sensor",
                 "battery_discharge_positive", "solar_production_positive",
-                "battery_sources", "solar_sources", "solar_phase_estimation"
+                "solar_sources", "solar_phase_estimation"
             )
         )
+        # The only battery change relevant to phase math is its power source/sign.
+        battery_power_signature = lambda settings: {
+            p: [(x["entity_id"], x["positive"]) for x in settings["battery_sources"][p]]
+            for p in PHASES
+        }
+        if battery_power_signature(new_settings) != battery_power_signature(self.settings):
+            measurement_changed = True
         self.settings = new_settings
         if reset_device is not None:
             # Remove only this entity's old phase evidence. Preserve every

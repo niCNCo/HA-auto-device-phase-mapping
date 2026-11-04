@@ -1,0 +1,10 @@
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const s=fs.readFileSync('custom_components/ha_auto_device_phase_mapping/frontend/phase-mapper.js','utf8');
+const compact=s.slice(s.indexOf('    _compactCard(d){'),s.indexOf('    _mapping(d){'));
+assert.match(compact,/this\._draft\?\.display_names\?\.\[r\.entity_id\]\|\|r\.display_name\|\|r\.name/);
+assert.match(compact,/this\._deviceIcon\(r\.entity_id,r\.display_icon\)/);
+assert.match(compact,/<ha-icon icon="\$\{esc\(icon\)\}"><\/ha-icon>/);
+assert.match(compact,/r\.offline\?'Offline':fmtW\(r\.power_w\)/);
+assert.doesNotMatch(compact,/\$\{esc\(r\.name\)\}<\/span>/);
+console.log('Compact card uses saved display names/icons and offline status.');

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import hashlib
 from pathlib import Path
 
 import voluptuous as vol
@@ -43,13 +44,15 @@ async def async_setup_entry(hass: HomeAssistant, entry) -> bool:
                      StaticPathConfig("/ha_auto_device_phase_mapping_static/brand", str(Path(__file__).parent / "brand"), cache_headers=False)]
                 )
                 data["_static_registered"] = True
-            # The card works without HACS also registering a separate dashboard resource.
-            frontend.add_extra_js_url(hass, f"{FRONTEND_PATH}?v={VERSION}")
+            # Content-hashed URLs also bust caches for locally rebuilt same-version ZIPs.
+            frontend_url = f"{FRONTEND_PATH}?v={VERSION}&build={hashlib.sha256(js_file.read_bytes()).hexdigest()[:12]}"
+            data["_frontend_url"] = frontend_url
+            frontend.add_extra_js_url(hass, frontend_url)
             await panel_custom.async_register_panel(
                 hass,
                 webcomponent_name="phase-mapper-panel",
                 frontend_url_path=PANEL_PATH,
-                module_url=f"{FRONTEND_PATH}?v={VERSION}",
+                module_url=frontend_url,
                 sidebar_title="Phase Mapper",
                 sidebar_icon="mdi:transmission-tower",
                 require_admin=False,
@@ -79,7 +82,7 @@ async def async_unload_entry(hass: HomeAssistant, entry) -> bool:
     await engine.save()
     data.pop(entry.entry_id, None)
     if data.pop("_frontend_registered", False):
-        frontend.remove_extra_js_url(hass, f"{FRONTEND_PATH}?v={VERSION}")
+        frontend.remove_extra_js_url(hass, data.pop("_frontend_url", f"{FRONTEND_PATH}?v={VERSION}"))
         frontend.async_remove_panel(hass, PANEL_PATH)
     return True
 

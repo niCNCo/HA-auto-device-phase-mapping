@@ -1,12 +1,20 @@
 # Automatic Phase Mapper
 
+**v1.6.3 Release Candidate 1 — responsive Lovelace card, more reliable layouts, and offline mapped-device visibility**
+
+This release candidate includes the updated four-column Lovelace card (L1 : L2 : L3 : Household = **1 : 1 : 1 : 2**), compact household ring/legend layout, responsive behavior, custom device names and icons, and retained mapped devices when their power sensors become unavailable. The main Mapping cockpit has refined spacing, more stable refresh/alignment, and device-level **Offline** feedback.
+
+**Status:** release candidate for Home Assistant testing. The phase-learning algorithm's core matching logic is unchanged. The latest source is being prepared on the `release/v1.6.3-rc1` branch; `main`/v1.6.2 remain the established baseline until approval.
+
+**Before upgrading:** Back up Home Assistant (including `.storage`), and restart Home Assistant after replacing the integration. Do not delete the integration entry or stored learning data.
+
+![Automatic Phase Mapper — full integration cockpit in v1.6.3 RC1](docs/images/mapping-overview.png)
+
 **Find out which electrical phase your Home Assistant devices are connected to — without manually tracing every circuit.**
 
 Automatic Phase Mapper is an experimental, local Home Assistant integration that correlates individual device power changes with your three-phase grid measurements. Over time, it builds evidence for L1, L2 or L3 and presents the results in a dedicated dashboard.
 
-![Automatic Phase Mapper v1.6.2 — real dashboard screenshot](docs/images/release-banner.png)
-
-**Current release:** `v1.6.2` · **Status:** Experimental / actively tested · **Designed for:** Three-phase Home Assistant installations
+**Candidate version:** `v1.6.3-rc1` (integration identifies as `1.6.3`) · **Status:** Experimental / candidate validation · **Designed for:** Three-phase Home Assistant installations
 
 [Get started](#installation) · [Explore the dashboard](#a-dashboard-built-around-your-phases) · [Learn faster](docs/TROUBLESHOOTING.md#help-a-low-power-or-slow-device-learn-faster) · [Troubleshooting](docs/TROUBLESHOOTING.md) · [Release notes](RELEASE_NOTES.md) · [Report an issue](https://github.com/niCNCo/HA-auto-device-phase-mapping/issues)
 
@@ -26,19 +34,25 @@ Automatic Phase Mapper helps discover that link by observing matching increases 
 
 > **What it does not do:** It does not physically measure your wiring or prove that an assignment is electrically correct. Confidence scores describe algorithmic evidence, not a certified circuit check. Phase current/headroom is monitoring only — **not** electrical protection or load balancing.
 
+## The Lovelace card — 1:1:1:2 responsive overview
+
+The compact Lovelace overview gives each of L1, L2 and L3 one share of the row and **Household total two shares** when there is enough room. The household ring and its totals, color-coded phase breakdown, and unknown/unmapped load appear together. At intermediate widths, the percentages are hidden first while wattages and labels remain; at smaller widths, cards reflow for readability. Use the card editor to select Compact or Detailed view.
+
+![Automatic Phase Mapper — compact Lovelace card, real v1.6.3 screenshot](docs/images/lovelace-card.png)
+
 ## A dashboard built around your phases
 
 ### 1. Mapping — the big picture
 
 See L1, L2 and L3 side by side, with live P1 data, mapped device power, remaining unknown consumption and total household load. Expand each phase to see the appliances associated with it.
 
-![Real mapping overview: L1, L2, L3 and household total](docs/images/mapping-overview.png)
+The current Mapping cockpit is shown in the screenshot at the top of this README.
 
 ### 2. Devices — mapped and still learning
 
-The Mapping page also has a searchable device section. Review the sensors that already have evidence, check the ones still learning, and use per-device controls when needed.
+Expand a phase to inspect its mapped devices, edit names/icons, or choose a manual phase override. A previously mapped power sensor that becomes `unavailable` or `unknown` remains in its learned phase list and count; its power field shows **Offline** in regular red text instead of a misleading wattage. It returns to live wattage automatically when its sensor recovers. Offline readings are excluded from the live summed power. The settings page also provides recognized/unmapped-device controls.
 
-![Actual Mapping page with device and still-learning lists](docs/images/mapping-devices.png)
+![Mapping cockpit expanded: learned phase assignments, custom icons and an offline garage fridge](docs/images/mapping-devices.png)
 
 ### 3. Settings — connect your measurement sources
 

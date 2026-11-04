@@ -1,7 +1,7 @@
-/* HA_auto_device_phase_mapping v1.6.2 — shared Home Assistant panel and dashboard card. */
+/* Automatic Phase Mapper — shared Home Assistant panel and dashboard card. */
 (() => {
   'use strict';
-  const VERSION = '1.6.2';
+  const VERSION = '1.6.3';
   const PHASES = ['L1', 'L2', 'L3'];
   const esc = value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
   const fmtW = value => value == null || !Number.isFinite(Number(value)) ? '—' : `${Math.round(Number(value)).toLocaleString()} W`;
@@ -14,6 +14,78 @@
   const css = `<style>
     :host{display:block;color:var(--primary-text-color);--pm-primary:var(--primary-color,#4588d3);--pm-green:#3fa788;--pm-yellow:#f5ad4e;--pm-purple:#a489cf;--pm-border:var(--divider-color,#ddd);font-family:var(--paper-font-body1_-_font-family,Roboto,sans-serif)}
     *,*:before,*:after{box-sizing:border-box}
+
+    .pm-compact-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}
+    .pm-compact-heading{display:flex;justify-content:space-between;gap:8px;margin-bottom:10px;font-size:13px}
+    .pm-compact-heading span{color:var(--secondary-text-color);font-size:11px}
+    .pm-compact-phase{--pm-phase:#14b8a6;background:color-mix(in srgb,var(--pm-phase) 8%,var(--card-background-color,#181818));border:1px solid color-mix(in srgb,var(--pm-phase) 42%,transparent);border-top:3px solid var(--pm-phase);border-radius:9px;padding:12px;min-width:0}
+    .pm-l1{--pm-phase:#3b82f6}.pm-l2{--pm-phase:#f59e0b}.pm-l3{--pm-phase:#a78bfa}.pm-total{--pm-phase:#14b8a6}
+    .pm-compact-phase>header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:9px;gap:6px;color:var(--pm-phase)}
+    .pm-compact-phase>header small{font-size:10px;color:var(--secondary-text-color)}
+    .pm-compact-line{display:flex;justify-content:space-between;gap:7px;font-size:11px;line-height:1.9}
+    .pm-compact-line span{color:var(--secondary-text-color);overflow-wrap:anywhere}
+    .pm-compact-line strong{white-space:nowrap}
+    .pm-compact-sum{border-top:1px solid var(--pm-border);padding-top:5px;margin-top:5px;color:var(--pm-phase)}
+    .pm-compact-sum strong{font-size:15px}
+    .pm-compact-headroom{font-size:10px;margin:8px 0;color:var(--secondary-text-color)}
+    .pm-compact-track{height:5px;border-radius:10px;overflow:hidden;background:color-mix(in srgb,var(--pm-phase) 14%,var(--card-background-color));margin-top:4px}
+    .pm-compact-track i{height:100%;display:block;background:var(--pm-phase);border-radius:10px}
+    .pm-compact-devices{margin-top:8px;padding-top:7px;border-top:1px solid var(--pm-border);font-size:11px}
+    .pm-compact-devices summary{cursor:pointer;font-weight:600}
+    .pm-compact-device{align-items:center;min-width:0}
+    .pm-compact-device-name{display:flex;align-items:center;gap:5px;min-width:0;overflow-wrap:anywhere}
+    .pm-compact-device-name ha-icon{--mdc-icon-size:15px;width:15px;height:15px;flex:0 0 15px;color:var(--pm-phase)}
+    .pm-compact-device strong.offline{color:#f87171;font-weight:400}
+    .pm-compact-footer{text-align:right;margin-top:11px;font-size:12px}
+    /* Household ring left, two independent legend columns to its right. */
+    .pm-ring-wrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:center;gap:8px;min-width:0}
+    .pm-ring-graphic{width:min(100%,248px);aspect-ratio:1;position:relative;margin:0 auto}
+    .pm-ring-graphic svg{display:block;width:100%;height:100%;overflow:visible}
+    .pm-ring-glow{stroke-linecap:butt}
+    .pm-ring-center{position:absolute;inset:25%;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;gap:3px}
+    .pm-ring-center strong{font-size:clamp(20px,1.7vw,25px);white-space:nowrap;letter-spacing:-.5px;font-variant-numeric:tabular-nums}
+    .pm-ring-center span{font-size:11px;color:var(--secondary-text-color);white-space:nowrap}
+    .pm-ring-legends{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:9px;min-width:0;width:100%}
+    .pm-ring-group{min-width:0;border:1px solid var(--pm-border);border-radius:9px;padding:9px;background:color-mix(in srgb,var(--card-background-color) 84%,transparent)}
+    .pm-ring-label{font-weight:650;font-size:11px;color:var(--secondary-text-color);margin:0 0 7px}
+    .pm-ring-legend{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;column-gap:5px;row-gap:1px;font-size:11px;padding:4px 0}
+    .pm-ring-legend span{display:flex;align-items:center;gap:6px;min-width:0}
+    .pm-ring-legend i{height:8px;width:8px;display:inline-block;border-radius:50%;flex:none}
+    .pm-ring-legend strong{font-size:11px;font-variant-numeric:tabular-nums;white-space:nowrap}
+    .pm-ring-legend small{color:var(--secondary-text-color);font-weight:400;font-size:10px}
+    .pm-household-graphic{margin:14px 0;padding:15px 0;border-top:1px solid var(--pm-border)}
+    .pm-household-graphic .pm-ring-graphic{width:min(100%,240px)}
+    @media(max-width:420px){.pm-ring-legends{grid-template-columns:1fr}}
+
+    @media(max-width:1150px){.pm-compact-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+    @media(max-width:570px){.pm-compact-grid{grid-template-columns:1fr}}
+    /* Household total: balanced left donut, borderless three-column data table.
+       Grouping is semantic only; values align across all six rows. */
+    .phasebox.total{container-type:inline-size;display:flex;flex-direction:column}
+    .phasebox.total .pm-household-graphic{margin:5px 0 8px;padding:0;border:0}
+    .phasebox.total .pm-ring-wrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:9px;align-items:center}
+    .phasebox.total .pm-ring-graphic{width:calc(100% - 8px);max-width:260px;height:auto;aspect-ratio:1;margin:auto}
+    .phasebox.total .pm-ring-center{inset:23%;gap:1px}
+    .phasebox.total .pm-ring-center strong{font-size:clamp(17px,1.5vw,24px)}
+    .phasebox.total .pm-ring-center span{font-size:10px}
+    .phasebox.total .pm-ring-legends{display:flex;flex-direction:column;gap:6px;min-width:0}
+    .phasebox.total .pm-ring-group{display:contents}
+    .phasebox.total .pm-ring-label{display:none}
+    .phasebox.total .pm-ring-legend{display:grid;grid-template-columns:minmax(0,1fr) 48px minmax(58px,auto);gap:4px;align-items:center;padding:2px 0;min-width:0;font-size:11px;line-height:1.2}
+    .phasebox.total .pm-ring-legend .pm-ring-desc{display:flex;align-items:center;gap:5px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px}
+    .phasebox.total .pm-ring-legend .pm-ring-desc i{width:7px;height:7px;flex:0 0 7px}
+    .phasebox.total .pm-ring-legend .pm-ring-pct{font-size:10px;text-align:right;white-space:nowrap;color:var(--secondary-text-color);font-variant-numeric:tabular-nums}
+    .phasebox.total .pm-ring-legend .pm-ring-watts{font-size:11px;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+    .phasebox.total .household-unmapped,.phasebox.total .unknown-load{display:none}
+    .phasebox.total .phase-devices{margin-top:auto;padding-top:8px}
+    .phasebox.total .mapped-device-card{margin-top:0}
+    /* When the tile narrows, the entire three-column list goes below the ring. */
+    @container (max-width:345px){
+      .phasebox.total .pm-ring-wrap{grid-template-columns:minmax(0,1fr);gap:8px}
+      .phasebox.total .pm-ring-graphic{width:min(calc(100% - 10px),200px)}
+      .phasebox.total .pm-ring-legends{gap:4px}
+      .phasebox.total .pm-ring-legend{grid-template-columns:minmax(0,1fr) 56px minmax(66px,auto)}
+    }
     .page{padding:16px 16px 56px;max-width:1450px;margin:0 auto}.surface{background:var(--card-background-color,#fff);box-shadow:var(--ha-card-box-shadow,0 1px 4px #0001);border-radius:var(--ha-card-border-radius,14px);padding:20px}
     .card{display:block}.card .surface{padding:16px}.paneltop{background:var(--app-header-background-color,var(--primary-color,#1864a8));color:var(--text-primary-color,#fff);padding:12px 20px;display:flex;align-items:center;gap:12px}
     .paneltop h2{margin:0;font-size:19px}.drawer{background:transparent;border:0;color:inherit;font-size:24px;cursor:pointer;min-width:38px;text-align:center}
@@ -76,7 +148,7 @@
     .row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--pm-border);min-width:0}.row:last-child{border-bottom:0}
     .row .left{min-width:0;flex:1}.name{font-size:13px;font-weight:600;overflow-wrap:anywhere}.meta{font-size:11px;color:var(--secondary-text-color);margin-top:4px;overflow-wrap:anywhere}
     .right{text-align:right;flex-shrink:0;max-width:120px}.ptext{font-size:13px;font-weight:700}.evidence{font-size:11px;color:var(--secondary-text-color);margin-top:2px}
-    .devpower{font-weight:700;font-variant-numeric:tabular-nums}.contrib{font-size:11px;color:var(--secondary-text-color);margin-top:3px}.devicebar{height:5px;border-radius:5px;background:var(--divider-color);overflow:hidden;margin-top:4px}.devicebar>span{display:block;height:100%;background:var(--phase-color,#3b82f6)}
+    .devpower{font-weight:700;font-variant-numeric:tabular-nums}.devpower.offline{color:#ef4444!important;font-weight:400}.contrib{font-size:11px;color:var(--secondary-text-color);margin-top:3px}.devicebar{height:5px;border-radius:5px;background:var(--divider-color);overflow:hidden;margin-top:4px}.devicebar>span{display:block;height:100%;background:var(--phase-color,#3b82f6)}
     .row[data-entity],.powerline[data-more]{cursor:pointer}.row[data-entity]:hover,.powerline[data-more]:hover{background:color-mix(in srgb,var(--primary-color) 9%,transparent)}
     .row[draggable="true"]{cursor:grab}.group.drop-target{outline:2px dashed var(--primary-color);background:color-mix(in srgb,var(--primary-color) 6%,transparent)}
     .settingsbox{background:color-mix(in srgb,var(--secondary-background-color) 70%,transparent);padding:15px;border-radius:13px;margin:12px 0 14px;border:1px solid var(--pm-border)}
@@ -221,6 +293,7 @@
     .native-icon-field:not(:defined){display:none}
     .native-icon-field:defined + .icon-choice-container{display:none}
     .version-link{background:transparent;border:0;color:var(--primary-color);padding:0;text-decoration:underline;font-weight:700;cursor:pointer}
+    .version-link.version-current{color:#22c55e}.version-link.version-outdated{color:#ef4444}.version-link.version-unverified{color:var(--secondary-text-color)}
     .version-status{font-size:12px}.version-status.current{color:#22c55e}.version-status.outdated{color:#ef4444}.version-status.unverified{color:var(--secondary-text-color)}
     @media(max-width:390px){.navmenu{font-size:16px;min-width:15px}.page{padding:0}.surface{padding:9px}.topnav{gap:2px;padding:0 4px;min-height:43px}.topbrand .mini-logo{width:21px;height:21px}.navtab{font-size:9.5px;padding:9px 3px}.topstat{min-width:35px;width:35px;padding:4px 0}.topstat strong{font-size:13px}.topstat span{font-size:7.5px}.topstats{gap:2px}.sensor-actions select{width:79px}.sensor-actions button{min-width:54px;font-size:10px;padding:6px}}
 
@@ -408,6 +481,216 @@
       .mapping-tools-bottom>details>summary .section-subtitle{flex:1 0 70%;margin-left:28px;border:0;padding-left:0}
       .mapping-tools-bottom>details>summary .section-chevron{margin-left:auto}
     }
+    /* v1.6.3: Phase summary bars use the entire available inner column.
+       Previous grid reserved an empty 86px selector column even though summary
+       rows have no selector. At <=250px a container rule removed that column,
+       unexpectedly making bars LONGER as the dashboard narrowed. Keep the
+       summary a single fluid column at every width. Device-row selectors are
+       intentionally unaffected. */
+    .phasebox .phase-devices .unknown-load .unknown-details,
+    .phasebox .phase-devices .mapped-combined .combined-details{
+      display:grid;
+      grid-template-columns:minmax(0,1fr);
+      min-width:0;
+    }
+    .phasebox .phase-devices .unknown-load .unknown-details>span[aria-hidden],
+    .phasebox .phase-devices .mapped-combined .combined-details>span[aria-hidden]{display:none}
+    .phasebox .phase-devices .unknown-load .unknown-data,
+    .phasebox .phase-devices .mapped-combined .combined-data{
+      min-width:0;
+      padding-left:20px;
+    }
+    .phasebox .phase-devices .unknown-load .devicebar,
+    .phasebox .phase-devices .mapped-combined .devicebar{
+      display:block;
+      box-sizing:border-box;
+      width:100%;
+      max-width:none;
+    }
+    /* v1.6.3 local revision: aligned household source/coverage legends. */
+    .phasebox.total .pm-household-graphic{margin:8px 0 10px;padding:0;border:0}
+    .phasebox.total .pm-ring-wrap{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:8px;align-items:center}
+    .phasebox.total .pm-ring-graphic{width:calc(100% - 4px);max-width:290px;margin:auto}
+    .phasebox.total .pm-ring-center strong{font-size:clamp(17px,1.5vw,24px)}
+    .phasebox.total .pm-ring-center span{font-size:10px}
+    .phasebox.total .pm-source-legend{display:grid;gap:12px;min-width:0}
+    .phasebox.total .pm-source-row{display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:12px;min-width:0}
+    .phasebox.total .pm-source-name{display:inline-flex;align-items:center;gap:6px;white-space:nowrap;min-width:0;color:var(--secondary-text-color)}
+    .phasebox.total .pm-source-name i,.phasebox.total .pm-coverage-item i{width:8px;height:8px;border-radius:50%;flex:0 0 8px;display:inline-block}
+    .phasebox.total .pm-source-row strong{font-size:12px;white-space:nowrap;font-variant-numeric:tabular-nums}
+    .phasebox.total .pm-coverage-panel{display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:repeat(4,minmax(0,1fr));gap:0;
+      min-height:88px;padding:7px 11px;border:1px solid color-mix(in srgb,var(--phase-accent) 17%,var(--pm-border));border-radius:10px;
+      background:color-mix(in srgb,var(--phase-accent) 3%,color-mix(in srgb,var(--card-background-color,#1e1e1e) 78%,#000 22%));}
+    .phasebox.total .pm-coverage-item{display:grid;grid-template-columns:minmax(0,1fr) 53px 72px;align-items:center;column-gap:5px;
+      min-width:0;min-height:17px;font-size:11.5px;line-height:1.15}
+    .phasebox.total .pm-coverage-name{display:flex;align-items:center;gap:6px;min-width:0;color:var(--secondary-text-color);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .phasebox.total .pm-coverage-item .pm-coverage-pct{text-align:right;color:var(--secondary-text-color);font-variant-numeric:tabular-nums;white-space:nowrap}
+    .phasebox.total .pm-coverage-item strong{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;font-size:11.5px}
+    /* Match the Unknown devices panel shade to the existing Mapped devices panels. */
+    .phasebox .unknown-load{background:color-mix(in srgb,var(--phase-accent) 3%,color-mix(in srgb,var(--card-background-color,#1e1e1e) 78%,#000 22%))}
+    /* Collapsed lists: the coverage panel shares the Unknown Devices row, and
+       the mapped section shares the bottom row. Expanded lists remain natural
+       height, so a tall L3 list cannot create a gap in Household Total. */
+    .phasebox.total .phase-devices{margin-top:10px;padding-top:0}
+    .phasebox.total:not(:has(.mapped-listing:not([hidden]))) .pm-household-graphic{
+      flex:1 1 auto;display:flex;flex-direction:column;justify-content:space-between;min-height:0}
+    .phasebox.total:not(:has(.mapped-listing:not([hidden]))) .pm-household-graphic .pm-coverage-panel{margin-top:auto}
+    .phasebox.total:has(.mapped-listing:not([hidden])) .pm-household-graphic{flex:none}
+    @container (max-width:320px){
+      .phasebox.total .pm-ring-wrap{grid-template-columns:minmax(0,1fr);gap:7px}
+      .phasebox.total .pm-ring-graphic{width:min(calc(100% - 8px),220px)}
+      .phasebox.total .pm-source-legend{gap:6px}
+      .phasebox.total .pm-coverage-panel{padding:7px 7px}
+      .phasebox.total .pm-coverage-item{grid-template-columns:minmax(0,1fr) 45px 65px;column-gap:3px;font-size:10px}
+      .phasebox.total .pm-coverage-item strong{font-size:10px}
+    }
+
+    /* v1.6.3: Consistent summary-card rhythm across L1/L2/L3/Household.
+       The household source totals must never touch the coverage panel, and
+       the coverage-to-mapped gap matches unknown-to-mapped on phase tiles. */
+    .phasebox{--pm-summary-gap:10px;--pm-summary-inset:11px}
+    .phasebox .unknown-load,
+    .phasebox .mapped-device-card{
+      box-sizing:border-box;
+      padding:11px var(--pm-summary-inset) 12px;
+    }
+    .phasebox .unknown-load .unknown-title,
+    .phasebox .mapped-section-head{
+      min-height:22px;
+      line-height:20px;
+      display:flex;
+      align-items:center;
+      margin:0 0 8px;
+    }
+    .phasebox .mapped-section-head{gap:6px}
+    .phasebox .mapped-device-card{margin-top:var(--pm-summary-gap)}
+    .phasebox .phase-devices .unknown-data,
+    .phasebox .phase-devices .combined-data{padding-left:20px}
+    .phasebox .phase-devices .unknown-load .devicebar,
+    .phasebox .phase-devices .mapped-combined .devicebar{margin-top:7px}
+    .phasebox.total .pm-household-graphic{margin-bottom:0}
+    .phasebox.total .pm-ring-wrap{margin-bottom:12px}
+    .phasebox.total .pm-source-legend{gap:10px}
+    .phasebox.total .pm-source-row{min-height:19px;gap:10px}
+    .phasebox.total .pm-coverage-panel{
+      margin-top:12px;
+      padding:9px 11px;
+      min-height:100px;
+      row-gap:3px;
+    }
+    .phasebox.total .pm-coverage-item{
+      grid-template-columns:minmax(0,1fr) minmax(42px,auto) minmax(58px,auto);
+      column-gap:9px;
+      min-height:19px;
+    }
+    .phasebox.total .pm-coverage-name{padding-right:2px}
+    .phasebox.total .phase-devices{margin-top:var(--pm-summary-gap)}
+    .phasebox.total:not(:has(.mapped-listing:not([hidden]))) .pm-household-graphic .pm-coverage-panel{
+      margin-top:auto;
+    }
+    /* When flex pushes coverage toward the bottom, still reserve breathing
+       room below the ring/source group using the ring's bottom margin. */
+    @container (max-width:320px){
+      .phasebox.total{--pm-summary-inset:9px}
+      .phasebox.total .pm-coverage-panel{padding:8px}
+      .phasebox.total .pm-coverage-item{
+        grid-template-columns:minmax(0,1fr) 40px 58px;
+        column-gap:5px;
+      }
+    }
+    /* Household v1.6.3 refinement: keep the coverage panel level with the
+       Unknown devices boxes in the three neighboring phase columns. The household card is flex-filled: removing the redundant gap after
+       coverage moves that coverage panel down, while the bottom-aligned mapped
+       section remains at the same vertical position. */
+    .phasebox.total .phase-devices{margin-top:0}
+    .phasebox.total .mapped-device-card{margin-top:0}
+    /* Give the ring a little more width only when the household tile can
+       accommodate the two-column legend without clipping names or watts. */
+    @container (min-width:355px){
+      .phasebox.total .pm-ring-wrap{grid-template-columns:minmax(0,1.35fr) minmax(0,1fr)}
+      .phasebox.total .pm-ring-graphic{width:100%;max-width:310px}
+    }
+    /* Full dashboard: keep the household mapped section level with the mapped
+       sections in L1/L2/L3. When the ring and source totals stack, the phase
+       coverage is redundant (it is already visible in the ring and phase cards).
+       Use the household tile's own width, not the viewport width. */
+    @container (max-width:345px){
+      .phasebox.total .pm-coverage-panel{display:none}
+      .phasebox.total .pm-household-graphic{min-height:0}
+      .phasebox.total .pm-ring-wrap{margin-bottom:0}
+    }
+    .phasebox.total .pm-household-graphic.pm-aligned{
+      flex:0 0 auto!important;
+      box-sizing:border-box;
+      justify-content:space-between;
+      min-height:0;
+    }
+    .phasebox.total .pm-household-graphic.pm-aligned .pm-coverage-panel{
+      margin-top:auto;
+    }
+    .phasebox.total .pm-household-graphic.pm-aligned .pm-ring-wrap{
+      flex:none;
+    }
+    /* Compact Lovelace card: 1 : 1 : 1 : 2 columns at desktop widths.
+       Household chart sits LEFT, both legends are stacked RIGHT. */
+    .pm-compact-wrap{container-type:inline-size;min-width:0;width:100%}
+    .pm-compact-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) minmax(0,2fr);gap:10px;align-items:stretch}
+    .pm-compact-phase{min-width:0}
+    .pm-compact-phase.pm-total{display:flex;flex-direction:column;min-width:0}
+    .pm-compact-heading{flex-wrap:wrap}
+    .pm-compact-household-body{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.08fr);grid-template-rows:auto auto;align-content:center;align-items:center;gap:8px 10px;min-width:0;flex:1}
+    .pm-compact-phase.pm-total .pm-ring-wrap{display:contents}
+    .pm-compact-phase.pm-total .pm-ring-graphic{grid-column:1;grid-row:1/3;width:min(100%,235px);max-width:100%;margin:auto;aspect-ratio:1;min-width:0}
+    .pm-compact-phase.pm-total .pm-ring-center{inset:23%;gap:1px}
+    .pm-compact-phase.pm-total .pm-ring-center strong{font-size:clamp(15px,1.4vw,22px);letter-spacing:-.45px}
+    .pm-compact-phase.pm-total .pm-ring-center span{font-size:9px;white-space:normal}
+    .pm-compact-phase.pm-total .pm-source-legend{grid-column:2;grid-row:1;display:grid;gap:6px;min-width:0;width:100%;align-self:end}
+    .pm-compact-phase.pm-total .pm-source-row{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:6px;align-items:center;min-width:0;font-size:11px;line-height:1.45}
+    .pm-compact-phase.pm-total .pm-source-name{display:flex;align-items:center;gap:5px;min-width:0;color:var(--secondary-text-color);overflow-wrap:anywhere}
+    .pm-compact-phase.pm-total .pm-source-name i,.pm-compact-phase.pm-total .pm-coverage-name i{display:inline-block;width:8px;height:8px;flex:0 0 8px;border-radius:50%}
+    .pm-compact-phase.pm-total .pm-source-row strong{white-space:nowrap;font-size:11px;font-variant-numeric:tabular-nums;text-align:right}
+    .pm-compact-phase.pm-total .pm-coverage-panel{grid-column:2;grid-row:2;display:grid;grid-template-columns:minmax(0,1fr);gap:5px;margin:0;padding:8px 0 0;border:0;border-top:1px solid var(--pm-border);border-radius:0;min-width:0;align-self:start}
+    .pm-compact-phase.pm-total .pm-coverage-item{display:grid;grid-template-columns:minmax(0,1fr) 36px 52px;gap:4px;align-items:center;min-width:0;line-height:1.35;font-size:10px}
+    .pm-compact-phase.pm-total .pm-coverage-name{display:flex;align-items:center;gap:5px;min-width:0;overflow-wrap:anywhere;color:var(--secondary-text-color)}
+    .pm-compact-phase.pm-total .pm-coverage-pct{text-align:right;white-space:nowrap;color:var(--secondary-text-color);font-variant-numeric:tabular-nums}
+    .pm-compact-phase.pm-total .pm-coverage-item strong{text-align:right;white-space:nowrap;font-size:10px;font-variant-numeric:tabular-nums}
+    /* First responsive step: hide ONLY percentages, keep four cards in one row. */
+    @container (min-width:861px) and (max-width:1050px){
+      .pm-compact-phase.pm-total .pm-coverage-pct{display:none}
+      .pm-compact-phase.pm-total .pm-coverage-item{grid-template-columns:minmax(0,1fr) minmax(48px,auto);gap:5px}
+    }
+    /* Then rearrange the tiles when the available card width becomes too narrow. */
+    @container (max-width:860px){
+      .pm-compact-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+      .pm-compact-phase.pm-total{grid-column:1/-1}
+      .pm-compact-household-body{grid-template-columns:minmax(0,175px) minmax(0,.85fr) minmax(0,1.25fr);grid-template-rows:auto;gap:12px}
+      .pm-compact-phase.pm-total .pm-ring-graphic{grid-column:1;grid-row:1;width:min(100%,175px)}
+      .pm-compact-phase.pm-total .pm-source-legend{grid-column:2;grid-row:1;align-self:center}
+      .pm-compact-phase.pm-total .pm-coverage-panel{grid-column:3;grid-row:1;align-self:center;border:1px solid var(--pm-border);border-radius:9px;padding:9px}
+      .pm-compact-phase.pm-total .pm-coverage-item{grid-template-columns:minmax(0,1fr) 42px 58px}
+    }
+    @container (max-width:740px){
+      .pm-compact-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+      .pm-compact-household-body{grid-template-columns:minmax(0,180px) minmax(0,1fr);grid-template-rows:auto auto;gap:10px 14px}
+      .pm-compact-phase.pm-total .pm-ring-graphic{grid-column:1;grid-row:1;width:min(100%,180px)}
+      .pm-compact-phase.pm-total .pm-source-legend{grid-column:2;grid-row:1}
+      .pm-compact-phase.pm-total .pm-coverage-panel{grid-column:1/-1;grid-row:2}
+    }
+    @container (max-width:480px){
+      .pm-compact-grid{grid-template-columns:minmax(0,1fr)}
+      .pm-compact-household-body{grid-template-columns:minmax(0,145px) minmax(0,1fr);column-gap:10px}
+      .pm-compact-phase.pm-total .pm-ring-graphic{width:min(100%,145px)}
+      .pm-compact-phase.pm-total .pm-ring-center strong{font-size:16px}
+    }
+    @container (max-width:345px){
+      .pm-compact-household-body{grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto auto}
+      .pm-compact-phase.pm-total .pm-ring-graphic{grid-column:1;grid-row:1;width:min(100%,170px)}
+      .pm-compact-phase.pm-total .pm-source-legend{grid-column:1;grid-row:2}
+      .pm-compact-phase.pm-total .pm-coverage-panel{grid-column:1;grid-row:3}
+    }
+    @media (prefers-reduced-motion:reduce){
+      .pm-compact-phase.pm-total .pm-ring-graphic *{transition:none!important;animation:none!important}
+    }
   </style>`;
 
   class PhaseMapperView extends HTMLElement {
@@ -422,22 +705,23 @@
       // One shared toggle ensures the same summary alignment in all four power tiles.
       this._phaseMappedExpanded=true;
       try{const preference=window.localStorage?.getItem('ha_auto_device_phase_mapping.mappedExpanded');if(preference!==null&&preference!==undefined)this._phaseMappedExpanded=preference==='true';}catch(_err){}
-      this._editor=null;this._versionDialog=false;this._releaseStatus=null;this._lastReleaseCheck=0;this._releaseLoading=false;
+      this._editor=null;this._versionDialog=false;this._releaseStatus=null;this._lastReleaseCheck=0;this._releaseLoading=false;this._releaseTimer=null;
 this._loading=false;this._busy=false;this._error='';this._message='';this._lastFetch=0;
       this._pmSkipWire=false;this._pmLastInteraction=0;this._pmTrackingInstalled=false;this._pmPendingStructure=false;
       this._refreshTimer=null;this._autoTimer=null;this._saveMismatch=[];this._draftRevision=0;this._serverRevision=0;this._confirmReset=false;this._resetAcknowledged=false;this._resetDeviceTarget=null;this._saveState='saved';
     }
     setConfig(config){this._config=config||{};this._render();}
+    static getConfigElement(){return document.createElement('phase-mapper-card-editor');}
     set hass(value){
       this._hass=value;
       // Update only the tiny value labels; never rebuild an open select or reset scroll.
       if (this._tab==='settings') this._updateLiveReadings();
       if (value?.callWS && !this._loading && Date.now()-this._lastFetch>this._refreshMs()) this._fetch();
     }
-    getCardSize(){return 7;}
-    static getStubConfig(){return {};}
-    connectedCallback(){this._pmTrackInteraction();this._render();this._startRefresh();if(this._hass)this._fetch();}
-    disconnectedCallback(){if(this._refreshTimer!==null){clearInterval(this._refreshTimer);this._refreshTimer=null;}if(this._dirty&&!this._busy)void this._autosave();}
+    getCardSize(){return this._config?.view==='detailed'?7:5;}
+    static getStubConfig(){return {view:'compact'};}
+    connectedCallback(){this._pmTrackInteraction();if(this.full&&typeof ResizeObserver==='function'){this._pmResizeObserver=new ResizeObserver(()=>{const grid=this.shadowRoot?.querySelector('.phases');const w=grid?.getBoundingClientRect().width||0;if(Math.abs(w-(this._pmLastGridWidth||0))>0.5){this._pmLastGridWidth=w;this._pmScheduleHouseholdAlignment();}});this._pmResizeObserver.observe(this);}this._render();this._startRefresh();void this._checkLatestRelease();if(this._releaseTimer===null)this._releaseTimer=setInterval(()=>{if(this.isConnected)void this._checkLatestRelease();},3*60*60*1000);if(this._hass)this._fetch();}
+    disconnectedCallback(){this._pmResizeObserver?.disconnect();this._pmResizeObserver=null;if(this._pmHouseholdAlignFrame!=null&&typeof cancelAnimationFrame==='function')cancelAnimationFrame(this._pmHouseholdAlignFrame);this._pmHouseholdAlignFrame=null;if(this._refreshTimer!==null){clearInterval(this._refreshTimer);this._refreshTimer=null;}if(this._releaseTimer!==null){clearInterval(this._releaseTimer);this._releaseTimer=null;}if(this._dirty&&!this._busy)void this._autosave();}
     _refreshMs(){return 1000*(Number(this._draft?.dashboard_refresh_seconds ?? this._data?.settings?.dashboard_refresh_seconds)||2);}
     _startRefresh(){
       if(this._refreshTimer!==null)clearInterval(this._refreshTimer);
@@ -447,6 +731,7 @@ this._loading=false;this._busy=false;this._error='';this._message='';this._lastF
         if(this.isConnected && this._hass?.callWS && !this._loading && !this._busy){
           // Keep controls stable; settings readings update from HA's state stream.
           if(this._tab==='settings')this._updateLiveReadings();
+      if(this.full&&this._tab==='mapping')this._pmScheduleHouseholdAlignment();
           else void this._fetch();
         }
       },this._refreshScheduledMs);
@@ -506,6 +791,7 @@ this._loading=false;this._busy=false;this._error='';this._message='';this._lastF
       const confidence=Math.max(0,Math.min(100,Number(r.confidence)||0));
       const phase=r.phase;
       const cleaned=Number(this._data?.corrected_power?.[phase]);
+      const offline=!!r.offline;
       const power=r.power_w==null?null:Number(r.power_w);
       const valid=PHASES.includes(phase)&&Number.isFinite(cleaned)&&cleaned>0&&power!==null&&Number.isFinite(power)&&power>=0;
       const share=valid?100*power/cleaned:(cleaned===0&&power===0?0:null);
@@ -524,7 +810,7 @@ this._loading=false;this._busy=false;this._error='';this._message='';this._lastF
         const ratio=share===null?null:Math.max(0,share);
         const pct=ratio===null?'—':`${ratio.toFixed(1)}% of ${phase}`;
         const barWidth=ratio===null?0:Math.min(100,ratio);
-        return `<div class="row ${r.excluded?'muted':''}" data-entity="${esc(r.entity_id)}" draggable="${canDrag}"><div class="left"><div class="device-alias">${iconMarkup}<div class="name" title="${esc(r.name)} · ${esc(r.entity_id)}">${esc(shownName)}</div>${certaintyDot}${aliasButton}</div><div class="device-details"><div class="devpower">${fmtW(r.power_w)} <span class="contrib">· ${esc(pct)}</span></div><div class="devicebar" style="--phase-color:var(--phase-accent)"><span style="width:${barWidth}%"></span></div></div></div><div class="right"><select class="manualcontrol" data-assign="${esc(r.entity_id)}" aria-label="Manual phase assignment">${phaseOptions}</select></div></div>`;
+        return `<div class="row ${r.excluded?'muted':''}" data-entity="${esc(r.entity_id)}" draggable="${canDrag}"><div class="left"><div class="device-alias">${iconMarkup}<div class="name" title="${esc(r.name)} · ${esc(r.entity_id)}">${esc(shownName)}</div>${certaintyDot}${aliasButton}</div><div class="device-details"><div class="devpower${offline?' offline':''}">${offline?'Offline':`${fmtW(r.power_w)} <span class="contrib">· ${esc(pct)}</span>`}</div>${offline?'':`<div class="devicebar" style="--phase-color:var(--phase-accent)"><span style="width:${barWidth}%"></span></div>`}</div></div><div class="right"><select class="manualcontrol" data-assign="${esc(r.entity_id)}" aria-label="Manual phase assignment">${phaseOptions}</select></div></div>`;
       }
       return `<div class="row ${r.excluded?'muted':''} ${phase==='Unknown'?'unknown':''}" data-entity="${esc(r.entity_id)}" draggable="${canDrag}">
         <div class="left"><div class="device-alias">${iconMarkup}<div class="name" title="${esc(r.name)} · ${esc(r.entity_id)}">${esc(shownName)}</div>${certaintyDot}${aliasButton}</div><div class="${phase==='Unknown'?'':'device-details'}"><div class="meta">${r.events} observations${r.excluded?' · excluded':''}</div>${r.diagnostics?.last_reason?`<div class="meta" title="${esc(r.diagnostics.last_detail||'')}">Last learning result: ${esc(r.diagnostics.last_reason.replaceAll('_',' '))} · ${Object.values(r.diagnostics.counts||{}).reduce((a,b)=>a+Number(b||0),0)} checks since restart</div>`:''}
@@ -532,8 +818,8 @@ this._loading=false;this._busy=false;this._error='';this._message='';this._lastF
         ${r.load_hints?`<div class="meta">ON-load feasibility clues: ${Number(r.load_hints)} (not accepted observations)</div>`:''}
         ${Number(r.diagnostics?.queue_depth||0)>0?`<div class="meta" title="Queued changes are processed by the device's learning worker">Queue: ${Number(r.diagnostics.queue_depth)} waiting · worker active${r.diagnostics.pending_age_seconds!=null?` for ${Number(r.diagnostics.pending_age_seconds).toFixed(0)} s`:''}</div>`:''}
         <div class="meta" title="Measured Home Assistant report interval, not the interval between wattage changes">Measured refresh: ${r.measured_refresh_seconds==null?'—':r.measured_refresh_seconds} s · ${esc(!r.timing_mode||r.timing_mode==='auto'?'Automatic timing':r.timing_mode+' override')}</div>
-        <div class="devpower">${fmtW(r.power_w)} <span class="contrib">${esc(percent)}</span></div>
-        ${share!==null&&share<=100?`<div class="devicebar" style="--phase-color:${phase==='L1'?'#3b82f6':phase==='L2'?'#f59e0b':'#a78bfa'}"><span style="width:${share}%"></span></div>`:''}</div>
+        <div class="devpower${offline?' offline':''}">${offline?'Offline':`${fmtW(r.power_w)} <span class="contrib">${esc(percent)}</span>`}</div>
+        ${!offline&&share!==null&&share<=100?`<div class="devicebar" style="--phase-color:${phase==='L1'?'#3b82f6':phase==='L2'?'#f59e0b':'#a78bfa'}"><span style="width:${share}%"></span></div>`:''}</div>
         </div>
         <div class="right"><div class="ptext${hint?' provisional':''}" title="${hint?'Provisional phase suggestion only — not verified wiring':''}">${manual?'Manual · ':''}${esc(phase==='Unknown'?(hint?'Likely '+hint.phase:'Learning…'):phase)}</div>
         ${manual?'<div class="evidence">Manual override</div>':`<div class="evidence">${confidence.toFixed(0)}% confirmed evidence</div>${hint?`<div class="evidence provisional-note" title="Only independently timed matches are counted. Not an automatic mapping.">${Number(hint.clues)} provisional clues · unconfirmed</div>`:''}<div class="bar"><span style="width:${confidence}%"></span></div>`}
@@ -544,6 +830,18 @@ this._loading=false;this._busy=false;this._error='';this._message='';this._lastF
       if(validMdi(selected))return selected;
       const native=this._hass?.states?.[entityId]?.attributes?.icon;
       return validMdi(native)?native:'mdi:power-plug';
+    }
+    _batterySoc(phase){
+      const sources=this._data?.settings?.battery_sources?.[phase]||[];
+      const values=sources.map(source=>{
+        const entity=source.soc_entity_id;
+        const state=entity?this._hass?.states?.[entity]:null;
+        const number=Number(state?.state);
+        return state && !['unknown','unavailable',''].includes(state.state)
+          && Number.isFinite(number) && number>=0 && number<=100
+          ? Math.round(number)+'%' : null;
+      }).filter(Boolean);
+      return values.join(' / ');
     }
     _top(d){
       const rows=d.devices||[],included=rows.filter(r=>!r.excluded),mapped=included.filter(r=>r.phase!=='Unknown');
@@ -574,7 +872,12 @@ this._loading=false;this._busy=false;this._error='';this._message='';this._lastF
       };
       const contents=(v,p)=>{
         const [label,watts]=batteryFlow(v?.battery,p);
-        return `<div class="powerlines">${line('P1 grid power',v?.grid,p==='TOTAL'?diag(p,'grid'):d.settings.phase_sensors[p])}${line(label,watts,diag(p,'battery'))}${line('Solar generation',v?.solar,diag(p,'solar'))}${line('Sum of loads',v?.cleaned,diag(p,'cleaned'),true)}</div>`;
+        const relevant=p==='TOTAL'?PHASES:[p];
+        const batteryConfigured=relevant.some(phase=>(d.settings.battery_sources?.[phase]||[]).some(source=>!!source.entity_id));
+        const solarConfigured=relevant.some(phase=>(d.settings.solar_sources?.[phase]||[]).some(source=>!!source.entity_id))
+          ||(d.settings.solar_sources?.TOTAL||[]).some(source=>!!source.entity_id);
+        const soc=p==='TOTAL'?PHASES.map(k=>this._batterySoc(k)).filter(Boolean).join(' · '):this._batterySoc(p);
+        return `<div class="powerlines">${line('P1 grid power',v?.grid,p==='TOTAL'?diag(p,'grid'):d.settings.phase_sensors[p])}${batteryConfigured?line(soc?label+' · SoC '+soc:label,watts,diag(p,'battery')):''}${solarConfigured?line('Solar generation',v?.solar,diag(p,'solar')):''}${line('Sum of loads',v?.cleaned,diag(p,'cleaned'),true)}</div>`;
       };
       const totals=Object.fromEntries(['grid','battery','solar','cleaned'].map(k=>[k,PHASES.every(p=>breakdown[p]?.[k]!=null&&Number.isFinite(breakdown[p][k]))?PHASES.reduce((sum,p)=>sum+breakdown[p][k],0):null]));
       const headroom=p=>{
@@ -645,14 +948,14 @@ this._loading=false;this._busy=false;this._error='';this._message='';this._lastF
       // Household "Not yet mapped" lives at the same height as the phase headroom
       // cards. The four Unknown devices sections therefore start on the same row.
       const householdUnmapped=`<div class="headroom household-unmapped" title="Measured Home Assistant devices whose electrical phase has not yet been learned."><div class="household-unmapped-title">Not yet mapped</div><div class="household-unmapped-data">${fmtW(notYetMapped)} <span>· ${notYetMappedPercent==null?'—':notYetMappedPercent.toFixed(1)+'%'}</span></div><div class="devicebar"><span style="width:${notYetMappedPercent==null?0:Math.min(100,notYetMappedPercent)}%"></span></div></div>`;
-      const phaseGrid=this.full?`<div class="phases">${PHASES.map(p=>`<div class="phasebox ${p.toLowerCase()}"><div class="phasehead"><strong>${p}</strong><span class="pill">${mappedCount(p)} mapped</span></div>${contents(breakdown[p],p)}${headroom(p)}${phaseDevices(p)}</div>`).join('')}<div class="phasebox total"><div class="phasehead"><strong>Household total</strong><span class="pill triphase-label"><span class="ph-l1">L1</span><span class="plus">+</span><span class="ph-l2">L2</span><span class="plus">+</span><span class="ph-l3">L3</span></span></div>${contents(totals,"TOTAL")}${householdUnmapped}${phaseDevices('TOTAL')}</div></div>`:'';
+      const phaseGrid=this.full?`<div class="phases">${PHASES.map(p=>`<div class="phasebox ${p.toLowerCase()}"><div class="phasehead"><strong>${p}</strong><span class="pill">${mappedCount(p)} mapped</span></div>${contents(breakdown[p],p)}${headroom(p)}${phaseDevices(p)}</div>`).join('')}<div class="phasebox total"><div class="phasehead"><strong>Household total</strong><span class="pill triphase-label"><span class="ph-l1">L1</span><span class="plus">+</span><span class="ph-l2">L2</span><span class="plus">+</span><span class="ph-l3">L3</span></span></div><div class="pm-household-graphic">${this._householdRing(d)}</div>${phaseDevices('TOTAL')}</div></div>`:'';
       const logoTheme=this._hass?.themes?.darkMode?'dark_':'';
       const statCard=(number,label,color)=>`<div class="topstat" style="--stat-color:${color}" title="${label}: ${number}"><strong>${number}</strong><span>${label}</span></div>`;
       const tabs=['mapping','settings','info'].map(t=>`<button data-tab="${t}" class="navtab ${this._tab===t?'active':''}">${t==='mapping'?'Mapping':t==='settings'?'Settings':'Info'}</button>`).join('');
       const header=`<nav class="topnav" aria-label="Phase Mapper navigation"><${this.full?'button':'div'} class="topbrand" ${this.full?'id="menu" aria-label="Open Home Assistant sidebar"':''} title="Automatic Phase Mapper · Passive Load Discovery · v${esc(d.version)}">
         <img class="wide-logo" src="/ha_auto_device_phase_mapping_static/brand/${logoTheme}logo@2x.png?v=${VERSION}" alt="Automatic Phase Mapper" />
         <img class="mini-logo" src="/ha_auto_device_phase_mapping_static/brand/${logoTheme}icon.png?v=${VERSION}" alt="Phase Mapper" /></${this.full?'button':'div'}>
-        <div class="navtabs">${tabs}</div><span class="topstatus"><span class="statusdot" style="${d.settings.learning_enabled?'':'background:#f59e0b'}"></span>${d.settings.learning_enabled?'Learning':'Paused'} · <button class="version-link" id="topVersionLink" title="Open GitHub repository">v${VERSION}</button></span><div class="topstats">${statCard(rows.length,'Detected','#94a3b8')}${statCard(mapped.length,'Mapped','#22c55e')}${statCard(rows.filter(r=>r.excluded).length,'Excluded','#94a3b8')}</div></nav>`;
+        <div class="navtabs">${tabs}</div><span class="topstatus"><span class="statusdot" style="${d.settings.learning_enabled?'':'background:#f59e0b'}"></span>${d.settings.learning_enabled?'Learning':'Paused'} · <button class="version-link version-${this._releaseStatus?.status||'unverified'}" id="topVersionLink" title="${esc(this._releaseStatus?.note||'Release not checked')}">v${VERSION}</button></span><div class="topstats">${statCard(rows.length,'Detected','#94a3b8')}${statCard(mapped.length,'Mapped','#22c55e')}${statCard(rows.filter(r=>r.excluded).length,'Excluded','#94a3b8')}</div></nav>`;
       return header+(this._tab==='mapping'?phaseGrid+`${this.full&&d.settings.solar_phase_estimation?.enabled?`<p class="hint">SolarEdge phase allocation: ${d.solar_estimation_status==='estimated'?'estimated from inverter V × I proportions, normalized to total AC power':d.solar_estimation_status==='fallback_equal'?'SolarEdge phase measurements unavailable; equal split shown as an estimate, learning paused':d.solar_estimation_status==='zero_generation'?'solar production near zero':d.solar_estimation_status==='solar_source_unavailable'?'solar source unavailable — learning paused':'using equal third allocation'}. Phase allocations assume similar power factors.</p>`:''}`:'');
     }
     _batterySystemRows(phase){
@@ -722,25 +1025,64 @@ this._loading=false;this._busy=false;this._error='';this._message='';this._lastF
     }
     _versionDialogHtml(){
       if(!this._versionDialog)return '';
-      return `<div class="editor-backdrop"><div class="editor-dialog" role="dialog" aria-modal="true"><h3>Open GitHub repository?</h3><p>Open the Automatic Phase Mapper repository in a new browser tab?</p><p class="hint">${esc(REPOSITORY)}</p><div class="actions"><button class="btn" id="cancelVersionLink">Cancel</button><a class="btn included" href="${esc(REPOSITORY)}" target="_blank" rel="noopener noreferrer" id="openVersionLink">Open repository</a></div></div></div>`;
+      return `<div class="editor-backdrop"><div class="editor-dialog" role="dialog" aria-modal="true"><h3>Open GitHub repository?</h3><p>${this._releaseStatus?.status==='outdated'?'Open the newer version v'+esc(this._releaseStatus.latest)+' release page?':'Open the Automatic Phase Mapper repository in a new browser tab?'}</p><p class="hint">${esc(this._releaseStatus?.status==='outdated'?this._releaseStatus.url:REPOSITORY)}</p><div class="actions"><button class="btn" id="cancelVersionLink">Cancel</button><a class="btn included" href="${esc(this._releaseStatus?.status==='outdated'?this._releaseStatus.url:REPOSITORY)}" target="_blank" rel="noopener noreferrer" id="openVersionLink">Open repository</a></div></div></div>`;
     }
-    async _checkLatestRelease(){
-      if(this._releaseLoading || Date.now()-this._lastReleaseCheck<6*60*60*1000)return;
-      this._releaseLoading=true;this._lastReleaseCheck=Date.now();
+    _updateVersionIndicator(){
+      const status=this._releaseStatus?.status||'unverified';
+      for(const id of ['topVersionLink','versionLink']){
+        const el=this.shadowRoot?.querySelector('#'+id);
+        if(!el)continue;
+        if(el.classList){
+          el.classList.remove('version-current','version-outdated','version-unverified');
+          el.classList.add('version-'+status);
+        }
+        el.title=this._releaseStatus?.note||'Release status not checked';
+      }
+    }
+    async _checkLatestRelease(force=false){
+      // /releases/latest excludes pre-releases. The published releases list
+      // includes betas, while drafts must be ignored.
+      if(this._releaseLoading||(!force&&Date.now()-this._lastReleaseCheck<3*60*60*1000))return;
+      this._releaseLoading=true;
+      this._lastReleaseCheck=Date.now();
       try{
-        const response=await fetch('https://api.github.com/repos/niCNCo/HA-auto-device-phase-mapping/releases/latest',{headers:{Accept:'application/vnd.github+json'}});
-        if(!response.ok)throw new Error(`GitHub API: ${response.status}`);
-        const release=await response.json();
-        const version=String(release.tag_name||'').replace(/^v/i,'');
-        if(!/^\d+\.\d+\.\d+(?:[-+][a-z0-9.-]+)?$/i.test(version))throw new Error('No recognized version tag');
-        const parts=v=>v.split(/[.-]/).slice(0,3).map(x=>Number(x)||0);
-        const a=parts(version),b=parts(VERSION);
-        const newer=a[0]>b[0] || a[0]===b[0]&&a[1]>b[1] || a[0]===b[0]&&a[1]===b[1]&&a[2]>b[2];
-        this._releaseStatus={latest:version,status:newer?'outdated':'current',note:newer?'Newer GitHub release available':'Latest published release is not newer'};
-      }catch(_error){
-        // Private repos and repos without published releases cannot be checked anonymously.
-        this._releaseStatus={latest:null,status:'unverified',note:'Cannot verify latest release (private repository, no release, or GitHub unavailable)'};
-      }finally{this._releaseLoading=false;if(this._tab==='info'&&!this._editor)this._render();}
+        const response=await fetch('https://api.github.com/repos/niCNCo/HA-auto-device-phase-mapping/releases?per_page=50',
+          {headers:{Accept:'application/vnd.github+json'}});
+        if(!response.ok)throw new Error('GitHub API: '+response.status);
+        const releases=await response.json();
+        if(!Array.isArray(releases))throw new Error('Invalid GitHub releases response');
+        const parse=tag=>{
+          const match=/^v?(\d+)\.(\d+)\.(\d+)(?:[-+][a-z0-9.-]+)?$/i.exec(String(tag||''));
+          return match?[Number(match[1]),Number(match[2]),Number(match[3])]:null;
+        };
+        const compare=(a,b)=>{
+          for(let i=0;i<3;i++)if(a[i]!==b[i])return a[i]-b[i];
+          return 0;
+        };
+        const available=releases.filter(release=>release&&!release.draft&&parse(release.tag_name))
+          .map(release=>({release,parts:parse(release.tag_name)}))
+          .sort((a,b)=>compare(b.parts,a.parts));
+        if(!available.length)throw new Error('No published version tags');
+        const latest=available[0],local=parse(VERSION);
+        if(!local)throw new Error('Invalid installed version');
+        const newer=compare(latest.parts,local)>0;
+        const version=String(latest.release.tag_name).replace(/^v/i,'');
+        this._releaseStatus={
+          latest:version,status:newer?'outdated':'current',
+          note:newer?'Newer GitHub release available'+(latest.release.prerelease?' (pre-release)':''):'No newer published release',
+          prerelease:!!latest.release.prerelease,
+          url:typeof latest.release.html_url==='string'&&latest.release.html_url.startsWith(REPOSITORY+'/releases/')?latest.release.html_url:REPOSITORY
+        };
+      }catch(error){
+        // Network, GitHub rate limits, and private repositories are unverified;
+        // never mark an unverified check as up-to-date.
+        this._releaseStatus={latest:null,status:'unverified',
+          note:'Release check unavailable ('+String(error?.message||error)+')'};
+      }finally{
+        this._releaseLoading=false;
+        if(this._tab==='info'&&!this._editor)this._render();
+        else this._updateVersionIndicator();
+      }
     }
     _learningDiagnostics(d){
       const stats=d.learning_diagnostics||{},count=stats.counts||{},history=stats.history||{};
@@ -755,6 +1097,104 @@ this._loading=false;this._busy=false;this._error='';this._message='';this._lastF
         <div class="diagdetail"><strong>Total accepted observations (saved):</strong> ${Number(stats.accepted_total||0)} · <strong>Saved tentative slow matches:</strong> ${Number(stats.tentative_votes_saved||0)} across ${Number(stats.tentative_devices||0)} sensors · <strong>Saved load feasibility hints:</strong> ${Number(stats.load_hints_saved||0)} · <strong>Waiting in transition queues:</strong> ${Number(stats.queued_transitions||0)} · <strong>Active learning workers:</strong> ${Number(stats.active_workers||0)} · <strong>Orphan queues:</strong> ${Number(stats.orphan_queues||0)} · <strong>In-flight evaluations:</strong> ${Number(stats.inflight_evaluations||0)} · <strong>Oldest worker:</strong> ${Number(stats.oldest_pending_seconds||0).toFixed(0)} s.</div>
         <div class="diagdetail">Rejection and transition counters are <strong>since restart</strong>. v1.6.1 adds two independent watchdog checks (1 s and 15 s), stalled-worker cancellation, retries of interrupted steps, bounded queue compaction, and a frontend/backend version mismatch warning. The existing staged fast heating-pulse matching remains enabled. Accepted observations and tentative slow-sensor matches are stored across restarts. Tentative ON/OFF matches and repeated ON-load hints are not proof of a phase; they expire after 14 days. They never assign a phase automatically without accepted correlation evidence. A clean corrected-power history must be rebuilt after startup. v1.5.5 uses a default 50 W change floor and compares averages across independent ON/OFF reporting periods when exact step matching fails. Click Export to download recent corrected phase power and device reports for debugging; the export includes entity names and usage timestamps.</div>
       </details>`;
+    }
+
+    _householdRing(d){
+      const breakdown=d.power_breakdown||{};
+      const phases=PHASES.map(p=>breakdown[p]||{});
+      const valid=(key)=>phases.every(v=>v[key]!=null&&Number.isFinite(Number(v[key])));
+      const loadValid=valid('cleaned');
+      const solarValid=valid('solar');
+      const batteryValid=valid('battery');
+      const load=loadValid?phases.reduce((sum,v)=>sum+Math.max(0,Number(v.cleaned)),0):null;
+      const solar=solarValid?phases.reduce((sum,v)=>sum+Number(v.solar),0):null;
+      const battery=batteryValid?phases.reduce((sum,v)=>sum+Number(v.battery),0):null;
+      // Battery convention is positive discharge / negative charging.
+      // The ring compares the magnitudes of these three independent readings.
+      // It is NOT an additive energy-balance equation, since consumption already
+      // reflects supply from solar, batteries and the grid.
+      const sourceValues=[load,solar,battery];
+      const sourceColors=['#14b8a6','#facc15','#94a3b8'];
+      const supplyMagnitude=sourceValues.reduce((sum,value)=>sum+(value==null?0:Math.abs(value)),0);
+      const rows=(d.devices||[]).filter(r=>!r.excluded);
+      const watt=r=>r.power_w==null||!Number.isFinite(Number(r.power_w))?0:Math.max(0,Number(r.power_w));
+      const threePhase=rows.filter(r=>r.phase==='3-phase').reduce((sum,r)=>sum+watt(r),0)/3;
+      const mappedPhase=PHASES.map((p,i)=>{
+        const observed=rows.filter(r=>r.phase===p).reduce((sum,r)=>sum+watt(r),0)+threePhase;
+        return loadValid?Math.min(Math.max(0,Number(phases[i].cleaned)),observed):0;
+      });
+      // Every household watt appears exactly once in the inner ring: the
+      // learned L1/L2/L3 contribution or the residual unknown / not-mapped load.
+      const mappedTotal=mappedPhase.reduce((sum,v)=>sum+v,0);
+      const unexplained=loadValid?Math.max(0,load-mappedTotal):0;
+      const arcs=(values,colors,radius,denominator)=>{
+        const circumference=2*Math.PI*radius;
+        let cursor=0;
+        return values.map((watts,index)=>{
+          const fraction=denominator>0?Math.max(0,watts)/denominator:0;
+          const length=fraction*circumference;
+          const offset=-cursor*circumference;
+          cursor+=fraction;
+          if(length<=0.1)return '';
+          return `<circle cx="60" cy="60" r="${radius}" fill="none" stroke="${colors[index]}" stroke-width="9" stroke-dasharray="${Math.max(0,length-.8)} ${circumference}" stroke-dashoffset="${offset}" transform="rotate(-90 60 60)" class="pm-ring-glow" style="filter:drop-shadow(0 0 3px ${colors[index]})"/>`;
+        }).join('');
+      };
+      const source=(label,watts,color)=>`<div class="pm-source-row"><span class="pm-source-name"><i style="background:${color}"></i>${label}</span><strong>${watts==null?'—':fmtW(watts)}</strong></div>`;
+      const coverage=(label,watts,color)=>`<div class="pm-coverage-item"><span class="pm-coverage-name" title="${label}"><i style="background:${color}"></i>${label}</span><span class="pm-coverage-pct">${loadValid&&load>0?(100*watts/load).toFixed(1)+'%':loadValid?'0.0%':'—'}</span><strong>${loadValid?fmtW(watts):'—'}</strong></div>`;
+      return `<div class="pm-ring-wrap">
+        <div class="pm-ring-graphic"><svg viewBox="0 0 120 120" role="img" aria-label="Outer: total loads, solar and battery power magnitudes. Inner: mapped L1, L2, L3 and unknown load.">
+          <circle cx="60" cy="60" r="46" fill="none" stroke="currentColor" stroke-opacity=".10" stroke-width="9"/>
+          <circle cx="60" cy="60" r="32" fill="none" stroke="currentColor" stroke-opacity=".10" stroke-width="9"/>
+          ${arcs(sourceValues.map(v=>v==null?0:Math.abs(v)),sourceColors,46,supplyMagnitude)}
+          ${loadValid?arcs([...mappedPhase,unexplained],['#3b82f6','#f59e0b','#a78bfa','#fb7185'],32,load):''}
+          </svg><div class="pm-ring-center"><strong>${loadValid?fmtW(load):'—'}</strong><span>Sum of loads</span></div></div>
+        <div class="pm-source-legend" aria-label="Household power readings">
+          ${source('Total loads',load,sourceColors[0])}
+          ${source('Solar',solar,sourceColors[1])}
+          ${source('Battery',battery,sourceColors[2])}
+        </div>
+      </div>
+      <div class="pm-coverage-panel" aria-label="Mapped phase and unknown household load">
+        ${coverage('L1',mappedPhase[0],'#3b82f6')}${coverage('L2',mappedPhase[1],'#f59e0b')}${coverage('L3',mappedPhase[2],'#a78bfa')}${coverage('Unknown / not mapped',unexplained,'#fb7185')}
+      </div>`;
+    }
+
+    _compactCard(d){
+      const breakdown=d.power_breakdown||{};
+      const included=(d.devices||[]).filter(r=>!r.excluded);
+      const devices=phase=>included.filter(r=>r.phase===phase);
+      const batteryConfigured=p=>(d.settings?.battery_sources?.[p]||[]).some(source=>!!source.entity_id);
+      const solarConfigured=p=>(d.settings?.solar_sources?.[p]||[]).some(source=>!!source.entity_id)
+        ||(d.settings?.solar_sources?.TOTAL||[]).some(source=>!!source.entity_id);
+      const phaseTile=p=>{
+        const v=breakdown[p]||{};
+        const h=d.grid_headroom?.[p];
+        const count=devices(p).length+(this._draft?.manual_devices||[]).filter(r=>r.phase===p).length;
+        const soc=this._batterySoc(p);
+        const current=h?Math.abs(Number(h.current)).toFixed(2)+' / '+Number(h.limit).toFixed(1)+' A':'Unavailable';
+        const used=h?Math.min(100,Math.max(0,Number(h.utilization)||0)):0;
+        const assigned=devices(p).reduce((sum,r)=>sum+Math.max(0,Number(r.power_w)||0),0)
+           +devices('3-phase').reduce((sum,r)=>sum+Math.max(0,Number(r.power_w)||0),0)/3;
+        const unknown=v.cleaned==null?null:Math.max(0,Number(v.cleaned)-assigned);
+        return `<section class="pm-compact-phase pm-${p.toLowerCase()}"><header><b>${p}</b><small>${count} mapped</small></header>
+          <div class="pm-compact-line"><span>P1 grid power</span><strong>${fmtW(v.grid)}</strong></div>
+          ${batteryConfigured(p)?`<div class="pm-compact-line"><span>Battery ${soc?'· SoC '+esc(soc):''}</span><strong>${fmtW(v.battery)}</strong></div>`:'' }
+          ${solarConfigured(p)?`<div class="pm-compact-line"><span>Solar generation</span><strong>${fmtW(v.solar)}</strong></div>`:'' }
+          <div class="pm-compact-line pm-compact-sum"><span>Sum of loads</span><strong>${fmtW(v.cleaned)}</strong></div>
+          <div class="pm-compact-headroom"><span>Grid current · ${current}</span><div class="pm-compact-track"><i style="width:${used}%"></i></div></div>
+          <div class="pm-compact-line"><span>Unknown devices</span><strong>${fmtW(unknown)}</strong></div>
+          <details class="pm-compact-devices"><summary>Mapped devices · ${count}</summary>
+          ${devices(p).map(r=>{
+            const label=this._draft?.display_names?.[r.entity_id]||r.display_name||r.name;
+            const icon=this._deviceIcon(r.entity_id,r.display_icon);
+            return `<div class="pm-compact-line pm-compact-device"><span class="pm-compact-device-name" title="${esc(r.entity_id)}"><ha-icon icon="${esc(icon)}"></ha-icon>${esc(label)}</span><strong class="${r.offline?'offline':''}">${r.offline?'Offline':fmtW(r.power_w)}</strong></div>`;
+          }).join('')||'<span class="hint">No mapped devices</span>'}</details>
+          </section>`;
+      };
+      return `<div class="pm-compact-wrap"><header class="pm-compact-heading"><b>Automatic Phase Mapper</b><span>${d.settings.learning_enabled?'● Learning':'Paused'} · v${VERSION}</span></header>
+        <div class="pm-compact-grid">${PHASES.map(phaseTile).join('')}
+        <section class="pm-compact-phase pm-total"><header><b>Household total</b><small>L1 + L2 + L3</small></header><div class="pm-compact-household-body">${this._householdRing(d)}</div></section></div>
+        <div class="pm-compact-footer"><a href="/ha-auto-device-phase-mapping">Open full dashboard</a></div></div>`;
     }
     _mapping(d){
       const rows=(d.devices||[]).filter(r=>(this._showExcluded||!r.excluded)&&`${r.name} ${this._draft?.display_names?.[r.entity_id]||''} ${r.entity_id} ${r.phase}`.toLowerCase().includes(this._filter.toLowerCase()));
@@ -823,12 +1263,23 @@ this._loading=false;this._busy=false;this._error='';this._message='';this._lastF
       const est=draft.solar_phase_estimation;
       const viFields=PHASES.map(p=>`<div class="field phasefield" style="--phase-color:${({L1:'#3b82f6',L2:'#f59e0b',L3:'#a78bfa'})[p]}"><label>${p} · Inverter AC current</label><select data-solar-vi="currents" data-solar-vi-phase="${p}">${viOpts(est.currents[p],'currents')}</select>${this._liveReading(est.currents[p])}<label style="margin-top:9px">${p} · Inverter AC voltage</label><select data-solar-vi="voltages" data-solar-vi-phase="${p}">${viOpts(est.voltages[p],'voltages')}</select>${this._liveReading(est.voltages[p])}</div>`).join('');
       const colors={L1:'#3b82f6',L2:'#f59e0b',L3:'#a78bfa',TOTAL:'#14b8a6'};
-      const sourceGroups=(type,groups)=>groups.map(p=>{
+      const socOptions=selected=>{
+         const available=Object.entries(this._hass?.states||{}).filter(([id,state])=>
+           id.startsWith('sensor.') && (state.attributes?.unit_of_measurement==='%' ||
+           state.attributes?.device_class==='battery'))
+           .map(([id,state])=>[id,state.attributes?.friendly_name||id])
+           .sort((a,b)=>a[1].localeCompare(b[1]));
+         if(selected&&!available.some(([id])=>id===selected))
+           available.unshift([selected,selected+' (unavailable)']);
+         return '<option value="">No SoC sensor</option>'+available.map(([id,name])=>
+           `<option value="${esc(id)}" ${id===selected?'selected':''}>${esc(name)} (${esc(id)})</option>`).join('');
+       };
+       const sourceGroups=(type,groups)=>groups.map(p=>{
         const items=draft[type][p]||[];
         return `<div class="field phasefield sourcegroup" style="--phase-color:${colors[p]}"><label>${p==='TOTAL'?'Total 3-phase':p} · ${type==='battery_sources'?'battery':'solar'} power</label>
           ${items.map((item,i)=>`<div class="sourceentry"><select data-source-type="${type}" data-source-phase="${p}" data-source-index="${i}">${opts(item.entity_id,'Select source')}</select>
           <label class="checkline" title="Checked: discharge / generation reports positive watts"><input type="checkbox" data-source-sign="${type}" data-source-phase="${p}" data-source-index="${i}" ${item.positive?'checked':''}> +W</label>
-          <button class="btn compactbtn" data-remove-source="${type}" data-remove-phase="${p}" data-remove-index="${i}" title="Remove source">×</button>${this._liveReading(item.entity_id)}</div>`).join('')}
+          <button class="btn compactbtn" data-remove-source="${type}" data-remove-phase="${p}" data-remove-index="${i}" title="Remove source">×</button>${this._liveReading(item.entity_id)}${type==='battery_sources'?`<label class="pm-soc-label">Battery SoC sensor (optional)</label><select data-battery-soc-phase="${p}" data-battery-soc-index="${i}">${socOptions(item.soc_entity_id||'')}</select>${item.soc_entity_id?this._liveReading(item.soc_entity_id):''}`:''}</div>`).join('')}
           <button class="btn compactbtn" data-add-source="${type}" data-add-phase="${p}">+ Add ${type==='battery_sources'?'battery':'solar'}</button></div>`;
       }).join('');
       const headroomFields=PHASES.map(p=>`<div class="field phasefield" style="--phase-color:${colors[p]}"><label>${p} · P1 phase current (A)</label><select data-grid-current="${p}">${viOpts(draft.grid_current_sensors[p],'currents')}</select>${this._liveReading(draft.grid_current_sensors[p])}<label style="margin-top:8px">${p} · P1 phase voltage (V)</label><select data-grid-voltage="${p}">${viOpts(draft.grid_voltage_sensors[p],'voltages')}</select>${this._liveReading(draft.grid_voltage_sensors[p])}<label style="margin-top:8px">${p} · Maximum current (A)</label><input type="number" min="1" max="125" step="0.5" data-current-limit="${p}" value="${draft.phase_current_limits_a[p]}"></div>`).join('');
@@ -841,7 +1292,7 @@ this._loading=false;this._busy=false;this._error='';this._message='';this._lastF
       const isAdmin=this._hass?.user?.is_admin!==false;
       return `<details id="settings-p1" class="settingsbox settings-collapsible" data-settings-section="p1" ${this._settingsSections.p1?'open':''}><summary class="settings-heading"><ha-icon icon="mdi:transmission-tower"></ha-icon><span>🔌 P1 measurement sources</span><ha-icon icon="mdi:chevron-down" class="settings-chevron"></ha-icon></summary><div class="settings-content"><p class="hint">Choose the individual signed P1 grid sensor for each phase.</p><div class="formgrid">${phaseSelect}</div></div></details>
       <details id="settings-headroom" class="settingsbox settings-collapsible" data-settings-section="headroom" ${this._settingsSections.headroom?'open':''}><summary class="settings-heading"><ha-icon icon="mdi:gauge"></ha-icon><span>📊 Main connection phase headroom</span><ha-icon icon="mdi:chevron-down" class="settings-chevron"></ha-icon></summary><div class="settings-content"><p class="hint">Choose grid-meter current and voltage sensors (not SolarEdge inverter sensors). Set your main fuse limit for each phase. This display is monitoring-only, using measured grid current—not cleaned household watts.</p><div class="formgrid">${headroomFields}</div><p class="hint">Green below 70%, amber 70–90%, red at 90% or higher. These are visual warnings, not electrical protection.</p></div></details>
-      <details id="settings-battery" class="settingsbox settings-collapsible" data-settings-section="battery" ${this._settingsSections.battery?'open':''}><summary class="settings-heading"><ha-icon icon="mdi:battery-charging"></ha-icon><span>🔋 Battery compensation</span><ha-icon icon="mdi:chevron-down" class="settings-chevron"></ha-icon></summary><div class="settings-content"><p class="hint">Add multiple battery power sensors per phase. Each +W box sets that source's discharge sign; uncheck if discharging is negative.</p><div class="formgrid">${sourceGroups('battery_sources',PHASES)}</div></div></details>
+      <details id="settings-battery" class="settingsbox settings-collapsible" data-settings-section="battery" ${this._settingsSections.battery?'open':''}><summary class="settings-heading"><ha-icon icon="mdi:battery-charging"></ha-icon><span>🔋 Battery compensation</span><ha-icon icon="mdi:chevron-down" class="settings-chevron"></ha-icon></summary><div class="settings-content"><p class="hint">Add multiple battery power sensors per phase. Each +W box sets that source's discharge sign; uncheck if discharging is negative. Optional SoC sensors are displayed only and never used for learning.</p><div class="formgrid">${sourceGroups('battery_sources',PHASES)}</div></div></details>
       <details id="settings-solar" class="settingsbox settings-collapsible" data-settings-section="solar" ${this._settingsSections.solar?'open':''}><summary class="settings-heading"><ha-icon icon="mdi:solar-power"></ha-icon><span>☀️ Solar compensation</span><ha-icon icon="mdi:chevron-down" class="settings-chevron"></ha-icon></summary><div class="settings-content"><p class="hint">Add phase-specific solar sensors, or add total three-phase generation under TOTAL (divided equally between phases). Do not select the same production twice.</p><div class="formgrid">${sourceGroups('solar_sources',[...PHASES,'TOTAL'])}</div></div></details>
       <details id="settings-estimate" class="settingsbox settings-collapsible" data-settings-section="estimate" ${this._settingsSections.estimate?'open':''}><summary class="settings-heading"><ha-icon icon="mdi:chart-bell-curve-cumulative"></ha-icon><span>☀️ SolarEdge phase power estimation</span><ha-icon icon="mdi:chevron-down" class="settings-chevron"></ha-icon></summary><div class="settings-content">
       <p class="hint">Optional: distribute your measured three-phase inverter AC power using each phase's AC voltage × current. The shares are normalized to the real inverter total, not calculated as V × I watts. Assumes approximately equal phase power factors; these are estimates.</p>
@@ -876,10 +1327,10 @@ this._loading=false;this._busy=false;this._error='';this._message='';this._lastF
       if(!this._releaseStatus&&!this._releaseLoading)void this._checkLatestRelease();
       const status=this._releaseStatus||{status:'unverified',note:'Checking for published GitHub releases…',latest:null};
       return `<div class="info-grid">
-      <section class="info-section wide"><h3>Version and repository</h3><p><strong>Installed:</strong> <button class="version-link" id="versionLink" title="Open repository with confirmation">v${VERSION}</button> · <strong>Latest published:</strong> ${status.latest?'v'+esc(status.latest):'Not verified'}</p>
-      <p><span class="version-status ${esc(status.status)}">${esc(status.note)}</span></p>
+      <section class="info-section wide"><h3>Version and repository</h3><p><strong>Installed:</strong> <button class="version-link version-${status.status}" id="versionLink" title="${esc(status.note)}">v${VERSION}</button> · <strong>Latest published:</strong> ${status.latest?'v'+esc(status.latest)+(status.prerelease?' (pre-release)':''):'Not verified'}</p>
+      <p><span class="version-status ${esc(status.status)}">${esc(status.note)}</span> <button class="btn compactbtn" id="checkReleaseNow" ${this._releaseLoading?'disabled':''}>${this._releaseLoading?'Checking…':'Check now'}</button></p>
       <p><strong>GitHub repository:</strong> <button class="version-link" id="repositoryLink">${esc(REPOSITORY)}</button></p>
-      <p class="hint">Version comparison uses the latest published GitHub release, not the newest commit. Private repositories and repositories without releases cannot be verified anonymously. Unknown is not treated as up-to-date.</p></section>
+      <p class="hint">Version comparison checks published GitHub releases, including pre-releases, on dashboard load and every three hours while open. Use Check now to refresh. It does not compare unpublished commits. Private repositories and repositories without releases cannot be verified anonymously. Unknown is not treated as up-to-date.</p></section>
       <section class="info-section wide"><h3>Welcome to Automatic Phase Mapper</h3><p>Passive monitoring only: the integration watches changes in Home Assistant device power sensors and compares them with corrected L1, L2 and L3 power changes. It does not switch or control equipment. Phase identification is an estimate, not suitable for electrical safety decisions.</p></section>
       <section class="info-section"><h3>1 · Initial setup</h3><ol><li>In <strong>Settings</strong>, choose the three individual P1 grid power sensors, measured in signed watts.</li><li>Optionally add battery and solar AC power sensors on their physical phases, with the correct sign for each sensor.</li><li>Enable learning and set the minimum device power change (50 W is the default starting point).</li><li>The Settings selectors show live signed values, units and last-update age under each selected entity. Click a reading for More info. Adjust dashboard refresh speed (1–30 seconds) in Settings. Your changes are saved automatically. The mapper starts collecting evidence as devices change their consumption.</li></ol></section>
       <section class="info-section"><h3>2 · Map devices</h3><p>In <strong>Mapping</strong>, devices begin under <strong>Still learning</strong>. Multiple clean power transitions build evidence for an automatic assignment. Slowly polled sensors can show <strong>Likely L1/L2/L3</strong> based on repeated preliminary clues without being automatically assigned. Learning combines clean ON/OFF events with averaged power-pattern changes, allowing delayed reporting and a 50 W default change threshold. Confidence converges more quickly when repeated changes clearly favor one phase; mapped device names show a red, orange, or green evidence dot. These indicate relative strength of evidence, not a calibrated probability.</p><p><strong>Drag and drop</strong> a device from Still learning into L1, L2, L3, or the 3-phase group to assign it manually. You can also use each device’s assignment dropdown, including on mobile. Choose <strong>Automatic</strong> to remove an override and resume learning.</p><p>Use <strong>Add appliance without a Home Assistant power sensor</strong> to register unmetered devices such as a coffee maker. Any power sensor (including Still learning) can have its display name and MDI icon customized with the pencil button without renaming its Home Assistant entity; clicking the device name still opens More info.</p><p>Mouse users can drag devices between phase lists. On touchscreens use the phase dropdown. Expand Still learning for the entire unmapped list, with no internal scroll bar. Its open/closed state is remembered when you navigate away and return in the same browser. Expand Mapped devices to see full learning evidence for mapped sensors.</p><p>Click a device row or power value to open Home Assistant's native More info dialog.</p></section>
@@ -1016,6 +1467,52 @@ this._loading=false;this._busy=false;this._error='';this._message='';this._lastF
       }
       return this._pmRenderSink;
     }
+    _pmAlignHouseholdMapped(){
+      // Align the *top* of Mapped devices, even when all device lists are open.
+      // No power data, learning state or DOM contents are modified.
+      if(!this.full || this._tab!=='mapping' || !this.isConnected)return;
+      const root=this.shadowRoot;
+      const phases=root?.querySelector('.phases');
+      const graphic=phases?.querySelector('.phasebox.total .pm-household-graphic');
+      const mapped=phases?.querySelector('.phasebox.total .mapped-device-card');
+      const reference=phases?.querySelector('.phasebox.l1 .mapped-device-card');
+      if(!phases||!graphic||!mapped||!reference)return;
+      // Only synchronize the four-column layout. In 1/2-column mode each tile
+      // should size naturally and never borrow a height from another row.
+      if(getComputedStyle(phases).gridTemplateColumns.split(' ').length!==4){
+        graphic.classList.remove('pm-aligned');graphic.style.removeProperty('height');return;
+      }
+      graphic.classList.remove('pm-aligned');
+      graphic.style.removeProperty('height');
+      // Browser layout, not data updates, determines the reference position.
+      const target=reference.getBoundingClientRect().top;
+      const graphicTop=graphic.getBoundingClientRect().top;
+      const styles=getComputedStyle(graphic);
+      const marginBottom=parseFloat(styles.marginBottom)||0;
+      // Let the ring and its visible legends retain their natural minimum size.
+      const ring=graphic.querySelector('.pm-ring-wrap');
+      const coverage=graphic.querySelector('.pm-coverage-panel');
+      const ringHeight=ring?.getBoundingClientRect().height||0;
+      const coverageVisible=coverage&&getComputedStyle(coverage).display!=='none';
+      const coverageHeight=coverageVisible?(coverage.getBoundingClientRect().height||0):0;
+      const gap=coverageVisible?12:0;
+      const natural=ringHeight+coverageHeight+gap;
+      const desired=Math.max(natural,Math.round(target-graphicTop-marginBottom));
+      if(Number.isFinite(desired)&&desired>0){
+        graphic.style.height=`${desired}px`;
+        graphic.classList.add('pm-aligned');
+      }
+    }
+    _pmScheduleHouseholdAlignment(){
+      if(!this.full)return;
+      if(this._pmHouseholdAlignFrame!=null&&typeof cancelAnimationFrame==='function')cancelAnimationFrame(this._pmHouseholdAlignFrame);
+      if(typeof requestAnimationFrame==='function'){
+        this._pmHouseholdAlignFrame=requestAnimationFrame(()=>{
+          this._pmHouseholdAlignFrame=null;
+          this._pmAlignHouseholdMapped();
+        });
+      }
+    }
     _render(){
       const remembered=[['mapped','mappedDevices'],['learning','stillLearning'],['addManual','addManualDevice'],['diagnostics','learningDiagnostics']];
       for(const [key,id] of remembered){const el=this.shadowRoot?.querySelector('#'+id);if(el)this._sections[key]=!!el.open;}
@@ -1023,19 +1520,25 @@ this._loading=false;this._busy=false;this._error='';this._message='';this._lastF
       if (!this.shadowRoot)return;
       const d=this._data;
       const shell='';
+      const compact=!this.full && this._config?.view!=='detailed';
       const display = !d ? `<div class="surface"><h2>Automatic Phase Mapper</h2><p class="hint">${esc(this._error||'Loading data from the integration…')}</p><button class="btn" id="refresh">Retry</button></div>`:
-        `<div class="surface">${this._top(d)}
+        `<div class="surface">${compact?"":this._top(d)}
         ${this._error?`<div class="warn" role="alert">${esc(this._error)}${this._saveState==='error'?' — changes have NOT been saved.':''}</div>`:''}
         ${this._dirty&&this._saveState!=='error'?`<div class="save-pending" role="status">${this._saveState==='saving'?'Saving changes to Home Assistant…':'Changes pending save…'}</div>`:''}
         ${this._message&&!this._dirty&&this._saveState==='saved'?`<div class="success" role="status">${esc(this._message)}</div>`:''}
         ${this._saveState==='error'&&this._dirty&&this._tab!=='settings'?'<button class="btn save-retry" id="retrySaveMapping">Retry saving changes</button>':''}
         ${!Object.values(d.settings.phase_sensors).every(Boolean)?'<div class="warn">Setup required: choose L1, L2 and L3 P1 phase power sensors in Settings.</div>':''}
-        ${this._tab==='mapping'?this._mapping(d):this._tab==='settings'?this._settings(d):this._info()}</div>`;
+        ${compact?this._compactCard(d):this._tab==='mapping'?this._mapping(d):this._tab==='settings'?this._settings(d):this._info()}</div>`;
       // Preserve both inner lists and the enclosing Home Assistant mobile scroller
       // during deliberate actions such as changing tabs, searching or editing.
       const externalBefore=this._pmPassiveRefresh?null:this._pmExternalScroll();
       const before=[...this.shadowRoot.querySelectorAll('.scroll')].map(e=>({top:e.scrollTop,left:e.scrollLeft}));
       this._pmRenderTarget.innerHTML=css+shell+(this.full?`<main class="page panel">${display}</main>`:`<div class="card">${display}</div>`)+this._editDialog()+this._versionDialogHtml()+this._resetDeviceDialogHtml();
+      // The render above replaces the entire mapping DOM, including the prior
+      // computed household height. Align synchronously *before the browser can
+      // paint* so a passive refresh never shows the unaligned intermediate
+      // position. ResizeObserver still handles genuine width changes.
+      if(this.full&&this._tab==='mapping')this._pmAlignHouseholdMapped();
       this.shadowRoot.querySelectorAll('.scroll').forEach((e,i)=>{if(before[i]){e.scrollTop=before[i].top;e.scrollLeft=before[i].left;}});
       if(externalBefore)this._pmRestoreExternalScroll(externalBefore);
       this._wire();
@@ -1108,6 +1611,16 @@ this._loading=false;this._busy=false;this._error='';this._message='';this._lastF
     _settingsAcknowledged(payload,result){
       const changed=Object.keys(payload).filter(key=>key!=='type'&&key!=='id');
       const ack=result?.save_ack;
+      // The acknowledgement only confirms a write operation, not the values.
+      // In particular, check the SoC selections inside battery_sources before
+      // ever showing the green Saved state. Older servers can omit SoC fields.
+      if(Object.prototype.hasOwnProperty.call(payload,'battery_sources')){
+        const actual=result?.settings?.battery_sources;
+        if(!this._sameSetting(payload.battery_sources,actual)){
+          this._saveMismatch=['battery_sources (including selected SoC sensors)'];
+          return false;
+        }
+      }
       // New servers confirm only AFTER awaiting the .storage save operation.
       // This acknowledgement is separate from the in-memory snapshot and
       // avoids a false rejection caused by JSON serialization differences.
@@ -1203,6 +1716,16 @@ this._loading=false;this._busy=false;this._error='';this._message='';this._lastF
     _wire(){
       if(this._pmSkipWire){this._pmSkipWire=false;return;}
       const root=this.shadowRoot;
+      // Only bind when a new DOM was actually rendered. Passive updates patch
+      // existing nodes and must not accumulate duplicate change handlers.
+      root.querySelectorAll('[data-battery-soc-phase]').forEach(select=>
+        select.addEventListener('change',()=>{
+          const item=this._draft?.battery_sources?.[select.dataset.batterySocPhase]?.[Number(select.dataset.batterySocIndex)];
+          if(!item)return;
+          item.soc_entity_id=select.value;
+          this._markDirty();
+          this._setSaveState('pending');
+        }));
       this._wireIconPicker('editIcon','editIconSuggestions','editIconPreview');
       this._wireIconPicker('manualIcon','manualIconSuggestions',null);
       for(const [nativeId,fallbackId,previewId] of [['editNativeIcon','editIcon','editIconPreview'],['manualNativeIcon','manualIcon',null]]){
@@ -1410,6 +1933,7 @@ this._loading=false;this._busy=false;this._error='';this._message='';this._lastF
         }
         this._editor=null;this._message='Device appearance updated. Saving…';this._markDirty();this._render();
       });
+      bind('#checkReleaseNow','click',()=>{void this._checkLatestRelease(true);});
       bind('#versionLink','click',()=>{this._versionDialog=true;this._render();});
       bind('#topVersionLink','click',()=>{this._versionDialog=true;this._render();});
       bind('#repositoryLink','click',()=>{this._versionDialog=true;this._render();});
@@ -1502,6 +2026,21 @@ this._loading=false;this._busy=false;this._error='';this._message='';this._lastF
 
   }
 
+
+  class PhaseMapperCardEditor extends HTMLElement {
+    setConfig(config){this._config=config||{};this._render();}
+    connectedCallback(){this._render();}
+    _render(){
+      this.innerHTML='<div style="padding:12px 0"><label for="pm-card-view">Card layout</label><select id="pm-card-view" style="display:block;width:100%;padding:10px;margin-top:8px"><option value="compact">Compact phase overview</option><option value="detailed">Detailed device list</option></select></div>';
+      const select=this.querySelector('#pm-card-view');
+      select.value=this._config?.view==='detailed'?'detailed':'compact';
+      select.addEventListener('change',()=>{
+        this._config={...this._config,view:select.value};
+        this.dispatchEvent(new CustomEvent('config-changed',{detail:{config:this._config},bubbles:true,composed:true}));
+      });
+    }
+  }
+  if(!customElements.get('phase-mapper-card-editor'))customElements.define('phase-mapper-card-editor',PhaseMapperCardEditor);
   if(!customElements.get('phase-mapper-card'))customElements.define('phase-mapper-card',PhaseMapperView);
   if(!customElements.get('phase-mapper-panel'))customElements.define('phase-mapper-panel',class extends PhaseMapperView {});
   window.customCards=window.customCards||[];
