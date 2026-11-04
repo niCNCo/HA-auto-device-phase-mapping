@@ -29,8 +29,8 @@ for(const type of ['phase-mapper-card','phase-mapper-panel']){
    assert(e.shadowRoot.innerHTML.includes('pm-compact-grid'));
    assert(e.shadowRoot.innerHTML.includes('pm-ring-graphic'));
    assert(e.shadowRoot.innerHTML.includes('pm-ring-group'));
-   assert(e.shadowRoot.innerHTML.includes('Phase distribution'));
-   assert(e.shadowRoot.innerHTML.includes('Device coverage'));
+   assert(e.shadowRoot.innerHTML.includes('Household total'));
+   assert(e.shadowRoot.innerHTML.includes('Unknown / not mapped'));
    assert(!e.shadowRoot.innerHTML.includes('Battery idle'));
    assert(!e.shadowRoot.innerHTML.includes('Solar generation'));
    e.setConfig({view:'detailed'});
